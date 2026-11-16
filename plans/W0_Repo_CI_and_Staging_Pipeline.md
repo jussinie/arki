@@ -9,7 +9,7 @@ Based on [Arki_Architecture_Decisions_and_First_Backlog.md](./Arki_Architecture_
 1. **Static Host**: **Cloudflare Pages** (deployed on merge to `main` via GitHub Actions, gated by green CI).
 2. **Package Manager**: **`npm`** (`package-lock.json` committed, `npm ci` in GitHub Actions).
 3. **Staging Supabase Project**: Exists and ready; GitHub Actions builds the SPA with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and pushes database migrations via `supabase db push`.
-4. **ADR Initial Statuses**: When extracting ADRs into `docs/adr/`, ADRs 1, 2, and 4–10 are marked `Accepted` (per the overview in `Arki_Architecture_Decisions_and_First_Backlog.md`: *"Nine of the ten ADRs are proposed for acceptance now. ADR 3 stays open until the Supabase spike reports"*), and ADR 3 remains `Open (spike)`.
+4. **ADR Initial Statuses**: When extracting ADRs into `docs/adr/`, ADRs 1, 2, and 4–10 are marked `Accepted` (per the overview in `Arki_Architecture_Decisions_and_First_Backlog.md`: _"Nine of the ten ADRs are proposed for acceptance now. ADR 3 stays open until the Supabase spike reports"_), and ADR 3 remains `Open (spike)`.
 
 ---
 
@@ -96,32 +96,33 @@ arki/
 
 All scripts must match these exact names so local development, `AGENTS.md`, and CI stay in sync:
 
-| Script | Command | Purpose |
-| --- | --- | --- |
-| `dev` | `vite` | Start local Vite dev server |
-| `build` | `tsc --noEmit && vite build` | Type-check and build production SPA into `dist/` |
-| `preview` | `vite preview --port 4173` | Preview built SPA locally |
-| `format` | `prettier --write .` | Format all files |
-| `format:check` | `prettier --check .` | Check formatting in CI |
-| `lint:eslint` | `eslint .` | Run ESLint (flat config) |
-| `lint:boundaries` | `depcruise src tools --config .dependency-cruiser.cjs` | Enforce module boundary rules on `src/` and `tools/` |
-| `lint` | `npm run lint:eslint && npm run lint:boundaries` | Run all static lint and boundary checks |
-| `typecheck` | `tsc --noEmit` | Run strict TypeScript compiler check |
-| `test:boundaries` | `vitest run supabase/tests/boundaries.test.ts` | Verify `dependency-cruiser` rejects deliberate violations |
-| `test:unit` | `vitest run --config vitest.config.ts` | Run unit & fast-check property tests (`src/**/*.test.{ts,tsx}`) |
-| `test:db` | `vitest run --config vitest.db.config.ts` | Run integration tests against local Supabase (`supabase/tests/init.test.ts`) |
-| `test:e2e` | `playwright test` | Run Playwright E2E tests (`e2e/**/*.spec.ts`) |
-| `db:start` | `supabase start` | Start local Supabase containers |
-| `db:stop` | `supabase stop` | Stop local Supabase containers |
-| `db:reset` | `supabase db reset` | Recreate local DB from `migrations/` + `seed.sql` |
-| `db:types` | `supabase gen types typescript --local > src/shared/supabase/database.types.ts` | Regenerate TypeScript types from local schema |
-| `db:types:check` | `npm run db:types && git diff --exit-code src/shared/supabase/database.types.ts` | Fail in CI if committed types drift from migrations |
+| Script            | Command                                                                          | Purpose                                                                      |
+| ----------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `dev`             | `vite`                                                                           | Start local Vite dev server                                                  |
+| `build`           | `tsc --noEmit && vite build`                                                     | Type-check and build production SPA into `dist/`                             |
+| `preview`         | `vite preview --port 4173`                                                       | Preview built SPA locally                                                    |
+| `format`          | `prettier --write .`                                                             | Format all files                                                             |
+| `format:check`    | `prettier --check .`                                                             | Check formatting in CI                                                       |
+| `lint:eslint`     | `eslint .`                                                                       | Run ESLint (flat config)                                                     |
+| `lint:boundaries` | `depcruise src tools --config .dependency-cruiser.cjs`                           | Enforce module boundary rules on `src/` and `tools/`                         |
+| `lint`            | `npm run lint:eslint && npm run lint:boundaries`                                 | Run all static lint and boundary checks                                      |
+| `typecheck`       | `tsc --noEmit`                                                                   | Run strict TypeScript compiler check                                         |
+| `test:boundaries` | `vitest run supabase/tests/boundaries.test.ts`                                   | Verify `dependency-cruiser` rejects deliberate violations                    |
+| `test:unit`       | `vitest run --config vitest.config.ts`                                           | Run unit & fast-check property tests (`src/**/*.test.{ts,tsx}`)              |
+| `test:db`         | `vitest run --config vitest.db.config.ts`                                        | Run integration tests against local Supabase (`supabase/tests/init.test.ts`) |
+| `test:e2e`        | `playwright test`                                                                | Run Playwright E2E tests (`e2e/**/*.spec.ts`)                                |
+| `db:start`        | `supabase start`                                                                 | Start local Supabase containers                                              |
+| `db:stop`         | `supabase stop`                                                                  | Stop local Supabase containers                                               |
+| `db:reset`        | `supabase db reset`                                                              | Recreate local DB from `migrations/` + `seed.sql`                            |
+| `db:types`        | `supabase gen types typescript --local > src/shared/supabase/database.types.ts`  | Regenerate TypeScript types from local schema                                |
+| `db:types:check`  | `npm run db:types && git diff --exit-code src/shared/supabase/database.types.ts` | Fail in CI if committed types drift from migrations                          |
 
 ---
 
 ## Step-by-Step Implementation Plan
 
 ### Step 1: Scaffold Vite + React + Strict TypeScript & Core Tooling
+
 1. Initialize `package.json` using `npm` (`"type": "module"`):
    - **Dependencies**: `react`, `react-dom`, `@supabase/supabase-js`, `@tanstack/react-query`, `zod`
    - **DevDependencies**: `vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`, `dependency-cruiser`, `prettier`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `fast-check`, `@playwright/test`, `supabase`
@@ -140,6 +141,7 @@ All scripts must match these exact names so local development, `AGENTS.md`, and 
    - `tools/import/index.ts` CLI placeholder.
 
 ### Step 2: Configure Module Boundary Rules & Deliberate Violation Verification
+
 Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching Working Agreements):
 
 1. **`only-api-and-shared-import-supabase`** (Rule 1 — Supabase client isolation):
@@ -208,6 +210,7 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
     5. Running `depcruise` on the clean `src/` and `tools/` tree exits with code `0`.
 
 ### Step 3: Testing Harnesses (Vitest, fast-check, Local Supabase Integration, Playwright)
+
 1. **Unit & Property Tests (`vitest.config.ts`, `npm run test:unit`)**:
    - Configure `vitest.config.ts` with `environment: 'jsdom'`, `include: ['src/**/*.test.{ts,tsx}']`, and `exclude: ['node_modules', 'dist', 'e2e', 'supabase']`.
    - Add `src/app/App.test.tsx` rendering `<App />` with `@testing-library/react` and asserting the `"Arki"` heading is present.
@@ -221,6 +224,7 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
    - Add `e2e/smoke.spec.ts` visiting `/` and asserting `expect(page.getByRole('heading', { name: 'Arki' })).toBeVisible()`.
 
 ### Step 4: Local Supabase CLI Project, Baseline Migration & Synthetic Seed
+
 1. Run `npx supabase init` (or create `supabase/config.toml` with `project_id = "arki"` and seed enabled).
 2. Create `supabase/migrations/20261116000000_init.sql`:
    ```sql
@@ -236,6 +240,7 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
 4. Commit a valid baseline `src/shared/supabase/database.types.ts` matching the output of `supabase gen types typescript --local`.
 
 ### Step 5: Documentation & ADR Extraction (`docs/adr/`, `AGENTS.md`, `README.md`)
+
 1. Extract ADRs 1–10 from `plans/Arki_Architecture_Decisions_and_First_Backlog.md` into `docs/adr/0001-*.md` through `docs/adr/0010-*.md`:
    - Include `# ADR N: <Title>`, `**Status:** Accepted` (or `**Status:** Open (spike)` for ADR 3), `**Date:** 2026-11-16`, and the exact `Context`, `Decision`, and `Consequences` text.
 2. Create `AGENTS.md` containing:
@@ -246,6 +251,7 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
 3. Create `README.md` covering prerequisites (Node 22+, Docker for local Supabase), quickstart commands, test commands, and links to `docs/adr/`, `AGENTS.md`, and `plans/`.
 
 ### Step 6: GitHub Actions CI, Staging DB Push, Cloudflare Pages Deploy & Repo Security
+
 1. **`.github/workflows/ci.yml`** with two jobs so staging deployment is strictly gated by CI:
    - **Job 1: `ci`** (runs on `pull_request` and `push` to `main`):
      1. `actions/checkout@v4`
@@ -280,16 +286,16 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
 
 ## Required GitHub Secrets for Staging Deployment
 
-| Secret / Variable | Purpose |
-| --- | --- |
-| `VITE_SUPABASE_URL` | Staging Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Staging Supabase public anon key |
-| `SUPABASE_PROJECT_ID` | Staging Supabase project reference ID (for `supabase db push`) |
-| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token for CLI migration push |
-| `SUPABASE_DB_PASSWORD` | Staging database password for `supabase db push` |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with `Cloudflare Pages:Edit` permission |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Target Cloudflare Pages project name (e.g. `arki-staging`) |
+| Secret / Variable               | Purpose                                                        |
+| ------------------------------- | -------------------------------------------------------------- |
+| `VITE_SUPABASE_URL`             | Staging Supabase project URL                                   |
+| `VITE_SUPABASE_ANON_KEY`        | Staging Supabase public anon key                               |
+| `SUPABASE_PROJECT_ID`           | Staging Supabase project reference ID (for `supabase db push`) |
+| `SUPABASE_ACCESS_TOKEN`         | Supabase personal access token for CLI migration push          |
+| `SUPABASE_DB_PASSWORD`          | Staging database password for `supabase db push`               |
+| `CLOUDFLARE_API_TOKEN`          | Cloudflare API token with `Cloudflare Pages:Edit` permission   |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                          |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | Target Cloudflare Pages project name (e.g. `arki-staging`)     |
 
 ---
 

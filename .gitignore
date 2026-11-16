@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Production build
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+playwright-report/
+test-results/
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# IDE & OS
+.DS_Store
+*.local

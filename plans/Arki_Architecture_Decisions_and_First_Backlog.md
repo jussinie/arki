@@ -19,18 +19,18 @@ Conventions:
 
 Nine of the ten ADRs are proposed for acceptance now. ADR 3 stays open until the Supabase spike reports.
 
-| ADR | Decision | Status |
-| --- | --- | --- |
-| 1 | Browser SPA: React, Vite, strict TypeScript | Proposed |
-| 2 | Supabase Auth, Postgres and RLS; no custom API server | Proposed |
-| 3 | Separate Supabase project for Arki | Open (spike) |
-| 4 | Coupled writes through Postgres functions (RPC) | Proposed |
-| 5 | One TypeScript nutrition contract; database stores results | Proposed |
-| 6 | Logged entries are immutable snapshots | Proposed |
-| 7 | `local_date` is the grouping key for all logs | Proposed |
-| 8 | Idempotent writes through client operation IDs | Proposed |
-| 9 | Repeatable, keyed library import with dry run | Proposed |
-| 10 | Reuse NutriTrack behaviour and tests, not structure | Proposed |
+| ADR | Decision                                                   | Status       |
+| --- | ---------------------------------------------------------- | ------------ |
+| 1   | Browser SPA: React, Vite, strict TypeScript                | Proposed     |
+| 2   | Supabase Auth, Postgres and RLS; no custom API server      | Proposed     |
+| 3   | Separate Supabase project for Arki                         | Open (spike) |
+| 4   | Coupled writes through Postgres functions (RPC)            | Proposed     |
+| 5   | One TypeScript nutrition contract; database stores results | Proposed     |
+| 6   | Logged entries are immutable snapshots                     | Proposed     |
+| 7   | `local_date` is the grouping key for all logs              | Proposed     |
+| 8   | Idempotent writes through client operation IDs             | Proposed     |
+| 9   | Repeatable, keyed library import with dry run              | Proposed     |
+| 10  | Reuse NutriTrack behaviour and tests, not structure        | Proposed     |
 
 ### ADR 1: Browser SPA with React, Vite and strict TypeScript
 
@@ -65,7 +65,7 @@ Nine of the ten ADRs are proposed for acceptance now. ADR 3 stays open until the
 
 **Proposed decision.** Create a new Supabase project for Arki, plus a separate staging project.
 
-**Decide after spike S-1.** Reuse the existing project only if it saves at least 3 working days *and* Arki's schema needs no legacy columns, fallbacks or shared tables with NutriTrack.
+**Decide after spike S-1.** Reuse the existing project only if it saves at least 3 working days _and_ Arki's schema needs no legacy columns, fallbacks or shared tables with NutriTrack.
 
 **Consequences if accepted.**
 
@@ -227,12 +227,12 @@ These rules run in CI with eslint-plugin-boundaries or dependency-cruiser, and a
 
 ### Environments
 
-| Environment | Database | Data | Deploys |
-| --- | --- | --- | --- |
-| Local | Supabase CLI (Docker) | Synthetic seed | On demand |
-| CI | Supabase CLI in GitHub Actions | Synthetic seed | Every push |
-| Staging | Staging Supabase project | Synthetic plus a sanitised library copy | Every merge to `main` |
-| Production | Arki Supabase project (ADR 3) | Real | Manual button |
+| Environment | Database                       | Data                                    | Deploys               |
+| ----------- | ------------------------------ | --------------------------------------- | --------------------- |
+| Local       | Supabase CLI (Docker)          | Synthetic seed                          | On demand             |
+| CI          | Supabase CLI in GitHub Actions | Synthetic seed                          | Every push            |
+| Staging     | Staging Supabase project       | Synthetic plus a sanitised library copy | Every merge to `main` |
+| Production  | Arki Supabase project (ADR 3)  | Real                                    | Manual button         |
 
 Real personal or health data never goes into local, CI or staging.
 
@@ -240,21 +240,21 @@ Real personal or health data never goes into local, CI or staging.
 
 The first two weeks deliver the spike and the water walking skeleton; launch needs items up to I-3. Items are in priority order; W-items are fully refined, later items get refined as they rise.
 
-| ID | Item | Proves | Depends on |
-| --- | --- | --- | --- |
-| S-1 | Spike: Supabase project choice and import mapping | ADR 3, ADR 9 feasibility | — |
-| W-0 | Repo, CI and staging pipeline | Delivery pipeline | — |
-| W-1 | Sign in and sign out | ADR 2 | W-0 |
-| W-2 | Add water to a chosen day | ADR 7, ADR 8, RLS | W-1 |
-| W-3 | See and remove the day's water | Query invalidation, RLS delete | W-2 |
-| N-1 | Port nutrition contract with characterization tests | ADR 5, ADR 10 | S-1 |
-| L-1 | Browse the imported library (read-only) | Library schema | S-1, W-1 |
-| I-1 | Import ingredients and portions (dry run + apply) | ADR 9 | L-1 |
-| F-1 | Log food from the library with a snapshot | ADR 4, ADR 6 | N-1, L-1 |
-| F-2 | Day summary for food and water | ADR 5, ADR 7 | F-1, W-3 |
-| I-2 | Import recipes, direct-macro meals and favourites | ADR 9 | I-1 |
-| R-1 | Create and edit a recipe atomically | ADR 4, ADR 6 | I-2, F-1 |
-| I-3 | Launch import and conflict review | Launch requirement | I-2, R-1 |
+| ID  | Item                                                | Proves                         | Depends on |
+| --- | --------------------------------------------------- | ------------------------------ | ---------- |
+| S-1 | Spike: Supabase project choice and import mapping   | ADR 3, ADR 9 feasibility       | —          |
+| W-0 | Repo, CI and staging pipeline                       | Delivery pipeline              | —          |
+| W-1 | Sign in and sign out                                | ADR 2                          | W-0        |
+| W-2 | Add water to a chosen day                           | ADR 7, ADR 8, RLS              | W-1        |
+| W-3 | See and remove the day's water                      | Query invalidation, RLS delete | W-2        |
+| N-1 | Port nutrition contract with characterization tests | ADR 5, ADR 10                  | S-1        |
+| L-1 | Browse the imported library (read-only)             | Library schema                 | S-1, W-1   |
+| I-1 | Import ingredients and portions (dry run + apply)   | ADR 9                          | L-1        |
+| F-1 | Log food from the library with a snapshot           | ADR 4, ADR 6                   | N-1, L-1   |
+| F-2 | Day summary for food and water                      | ADR 5, ADR 7                   | F-1, W-3   |
+| I-2 | Import recipes, direct-macro meals and favourites   | ADR 9                          | I-1        |
+| R-1 | Create and edit a recipe atomically                 | ADR 4, ADR 6                   | I-2, F-1   |
+| I-3 | Launch import and conflict review                   | Launch requirement             | I-2, R-1   |
 
 ### S-1 Spike: Supabase project and import mapping (time-box: 3 days)
 
