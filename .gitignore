@@ -17,6 +17,7 @@ dist/
 # Testing
 playwright-report/
 test-results/
+**/__violation__.ts
 
 # Supabase local
 supabase/.temp/

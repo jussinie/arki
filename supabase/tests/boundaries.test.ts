@@ -25,7 +25,15 @@ type DepcruiseOutput = {
 function runDepcruiseJson(rootDir: string): DepcruiseOutput {
   const result = spawnSync(
     'npx',
-    ['depcruise', 'src', 'tools', '--config', '.dependency-cruiser.cjs', '--output-type', 'json'],
+    [
+      'depcruise',
+      'src',
+      'tools',
+      '--config',
+      '.dependency-cruiser.cjs',
+      '--output-type',
+      'json',
+    ],
     {
       cwd: rootDir,
       encoding: 'utf-8',
@@ -41,7 +49,11 @@ function runDepcruiseJson(rootDir: string): DepcruiseOutput {
   }
 }
 
-function runDepcruiseCli(rootDir: string): { status: number | null; stdout: string; stderr: string } {
+function runDepcruiseCli(rootDir: string): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+} {
   const result = spawnSync(
     'npx',
     ['depcruise', 'src', 'tools', '--config', '.dependency-cruiser.cjs'],
@@ -62,7 +74,10 @@ describe('Module Boundary Enforcement (ADRs & Working Agreements)', () => {
   const rootDir = path.resolve(__dirname, '../..');
   const createdFiles: string[] = [];
 
-  function writeTempViolationFile(relativePath: string, content: string): string {
+  function writeTempViolationFile(
+    relativePath: string,
+    content: string
+  ): string {
     const fullPath = path.join(rootDir, relativePath);
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, content, 'utf-8');
@@ -70,13 +85,32 @@ describe('Module Boundary Enforcement (ADRs & Working Agreements)', () => {
     return fullPath;
   }
 
-  afterEach(() => {
+  function removeCreatedFiles(): void {
     while (createdFiles.length > 0) {
       const file = createdFiles.pop();
       if (file && fs.existsSync(file)) {
         fs.unlinkSync(file);
       }
     }
+  }
+
+  function cruiseWithViolation(
+    relativePath: string,
+    content: string
+  ): { cli: ReturnType<typeof runDepcruiseCli>; json: DepcruiseOutput } {
+    writeTempViolationFile(relativePath, content);
+    try {
+      return {
+        cli: runDepcruiseCli(rootDir),
+        json: runDepcruiseJson(rootDir),
+      };
+    } finally {
+      removeCreatedFiles();
+    }
+  }
+
+  afterEach(() => {
+    removeCreatedFiles();
   });
 
   it('passes on the clean repository tree with 0 violations and exit code 0', () => {
@@ -89,17 +123,14 @@ describe('Module Boundary Enforcement (ADRs & Working Agreements)', () => {
   });
 
   it('rejects Supabase imports outside features/*/api, shared/supabase, and tools/import (Rule 1: only-api-and-shared-import-supabase)', () => {
-    writeTempViolationFile(
+    const { cli, json } = cruiseWithViolation(
       'src/features/water/ui/__violation__.ts',
       "import { supabase } from '../../../shared/supabase';\nexport const x = supabase;\n"
     );
 
-    const cliResult = runDepcruiseCli(rootDir);
-    expect(cliResult.status).not.toBe(0);
-
-    const jsonOutput = runDepcruiseJson(rootDir);
-    expect(jsonOutput.summary.error).toBeGreaterThan(0);
-    const violation = jsonOutput.summary.violations.find(
+    expect(cli.status).not.toBe(0);
+    expect(json.summary.error).toBeGreaterThan(0);
+    const violation = json.summary.violations.find(
       (v) => v.rule.name === 'only-api-and-shared-import-supabase'
     );
     expect(violation).toBeDefined();
@@ -107,17 +138,14 @@ describe('Module Boundary Enforcement (ADRs & Working Agreements)', () => {
   });
 
   it('rejects shared UI importing feature internals or Supabase (Rule 2: ui-never-imports-supabase-or-feature-internals)', () => {
-    writeTempViolationFile(
+    const { cli, json } = cruiseWithViolation(
       'src/shared/ui/__violation__.ts',
       "import { WaterTracker } from '../../features/water';\nexport const x = WaterTracker;\n"
     );
 
-    const cliResult = runDepcruiseCli(rootDir);
-    expect(cliResult.status).not.toBe(0);
-
-    const jsonOutput = runDepcruiseJson(rootDir);
-    expect(jsonOutput.summary.error).toBeGreaterThan(0);
-    const violation = jsonOutput.summary.violations.find(
+    expect(cli.status).not.toBe(0);
+    expect(json.summary.error).toBeGreaterThan(0);
+    const violation = json.summary.violations.find(
       (v) => v.rule.name === 'ui-never-imports-supabase-or-feature-internals'
     );
     expect(violation).toBeDefined();
@@ -125,35 +153,46 @@ describe('Module Boundary Enforcement (ADRs & Working Agreements)', () => {
   });
 
   it('rejects cross-feature imports bypassing index.ts (Rule 3: cross-feature-only-via-index)', () => {
-    writeTempViolationFile(
+    const { cli, json } = cruiseWithViolation(
       'src/features/food-log/ui/__violation__.ts',
       "import { fetchWaterEntries } from '../../water/api';\nexport const x = fetchWaterEntries;\n"
     );
 
-    const cliResult = runDepcruiseCli(rootDir);
-    expect(cliResult.status).not.toBe(0);
-
-    const jsonOutput = runDepcruiseJson(rootDir);
-    expect(jsonOutput.summary.error).toBeGreaterThan(0);
-    const violation = jsonOutput.summary.violations.find(
+    expect(cli.status).not.toBe(0);
+    expect(json.summary.error).toBeGreaterThan(0);
+    const violation = json.summary.violations.find(
       (v) => v.rule.name === 'cross-feature-only-via-index'
     );
     expect(violation).toBeDefined();
-    expect(violation?.from).toContain('src/features/food-log/ui/__violation__.ts');
+    expect(violation?.from).toContain(
+      'src/features/food-log/ui/__violation__.ts'
+    );
+  });
+
+  it('rejects app imports of feature internals bypassing index.ts (Rule 3: app-to-feature-only-via-index)', () => {
+    const { cli, json } = cruiseWithViolation(
+      'src/app/__violation__.ts',
+      "import { fetchWaterEntries } from '../features/water/api';\nexport const x = fetchWaterEntries;\n"
+    );
+
+    expect(cli.status).not.toBe(0);
+    expect(json.summary.error).toBeGreaterThan(0);
+    const violation = json.summary.violations.find(
+      (v) => v.rule.name === 'app-to-feature-only-via-index'
+    );
+    expect(violation).toBeDefined();
+    expect(violation?.from).toContain('src/app/__violation__.ts');
   });
 
   it('rejects nutrition contract importing React or outside dependencies (Rule 4: pure-nutrition-contract)', () => {
-    writeTempViolationFile(
+    const { cli, json } = cruiseWithViolation(
       'src/nutrition/__violation__.ts',
       "import React from 'react';\nexport const x = React;\n"
     );
 
-    const cliResult = runDepcruiseCli(rootDir);
-    expect(cliResult.status).not.toBe(0);
-
-    const jsonOutput = runDepcruiseJson(rootDir);
-    expect(jsonOutput.summary.error).toBeGreaterThan(0);
-    const violation = jsonOutput.summary.violations.find(
+    expect(cli.status).not.toBe(0);
+    expect(json.summary.error).toBeGreaterThan(0);
+    const violation = json.summary.violations.find(
       (v) => v.rule.name === 'pure-nutrition-contract'
     );
     expect(violation).toBeDefined();
