@@ -50,17 +50,30 @@ test.describe('Sign-in page', () => {
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   });
 
-  test('submitting a filled form stays on the sign-in page', async ({
+  test('a known account signs in and sees Today with their email', async ({
     page,
   }) => {
     await page.goto('/');
 
     await page.getByLabel('Email').fill('test@example.com');
-    await page.getByLabel('Password').fill('secret');
+    await page.getByLabel('Password').fill('Arki-test-password-123!');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-    await expect(page).toHaveURL('/');
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('test@example.com', { exact: true })
+    ).toBeVisible();
+    await expect(page.getByLabel('Password')).toHaveCount(0);
+
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText('test@example.com', { exact: true })
+    ).toBeVisible();
   });
 });
 

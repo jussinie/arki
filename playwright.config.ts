@@ -1,4 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+
+// Use the local stack's public credentials unless explicitly configured.
+const localSupabase: { API_URL?: string; ANON_KEY?: string } =
+  process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY
+    ? {}
+    : (JSON.parse(
+        execFileSync('npx', ['supabase', 'status', '-o', 'json'], {
+          encoding: 'utf8',
+        })
+      ) as { API_URL: string; ANON_KEY: string });
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,9 +34,13 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       VITE_SUPABASE_URL:
-        process.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:54321',
+        process.env.VITE_SUPABASE_URL ??
+        localSupabase.API_URL ??
+        'http://127.0.0.1:54321',
       VITE_SUPABASE_ANON_KEY:
-        process.env.VITE_SUPABASE_ANON_KEY ?? 'placeholder-anon-key',
+        process.env.VITE_SUPABASE_ANON_KEY ??
+        localSupabase.ANON_KEY ??
+        'placeholder-anon-key',
     },
   },
 });
