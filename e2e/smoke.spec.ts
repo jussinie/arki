@@ -4,5 +4,8 @@ test.describe('App Smoke Test', () => {
   test('renders the application heading', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Arki' })).toBeVisible();
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 });
