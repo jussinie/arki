@@ -7,7 +7,8 @@ module.exports = {
         'Only src/features/*/api/**, src/shared/supabase/**, and tools/import/** may import Supabase',
       severity: 'error',
       from: {
-        pathNot: '^(src/features/[^/]+/api/|src/shared/supabase/|tools/import/)',
+        pathNot:
+          '^(src/features/[^/]+/api/|src/shared/supabase/|tools/import/)',
       },
       to: {
         path: '((node_modules/@supabase/supabase-js)|^@supabase/supabase-js|src/shared/supabase/)',
