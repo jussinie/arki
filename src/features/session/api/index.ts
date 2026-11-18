@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../shared/supabase';
 import type { Session } from '../model';
 
@@ -7,8 +7,11 @@ export type SignInCredentials = {
   password: string;
 };
 
+const sessionKey = ['session'] as const;
+
 export async function getCurrentSession(): Promise<Session | null> {
-  const { data } = await supabase.auth.getSession();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
   if (!data.session?.user) {
     return null;
   }
@@ -18,15 +21,27 @@ export async function getCurrentSession(): Promise<Session | null> {
   };
 }
 
-// Stub until the successful sign-in story calls Supabase Auth.
 export async function signInWithPassword(
   credentials: SignInCredentials
-): Promise<void> {
-  void credentials;
+): Promise<Session> {
+  const { data, error } = await supabase.auth.signInWithPassword(credentials);
+  if (error) throw error;
+  return {
+    userId: data.user.id,
+    email: data.user.email ?? null,
+  };
+}
+
+export function useCurrentSession() {
+  return useQuery({ queryKey: sessionKey, queryFn: getCurrentSession });
 }
 
 export function useSignIn() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: signInWithPassword,
+    onSuccess: (session) => {
+      queryClient.setQueryData(sessionKey, session);
+    },
   });
 }

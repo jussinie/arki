@@ -1,0 +1,26 @@
+.today {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.today__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  border-bottom: 1px solid #d4cfc4;
+  padding-bottom: 1rem;
+}
+
+.today__header h1,
+.today__email {
+  margin: 0;
+}
+
+.today__email {
+  overflow-wrap: anywhere;
+  color: #3f3a33;
+}

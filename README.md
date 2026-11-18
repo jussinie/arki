@@ -36,6 +36,12 @@ Arki is a responsive browser single-page application for food and water tracking
    npm run dev
    ```
 
+The local seed includes the synthetic account `test@example.com` with password
+`Arki-test-password-123!`. Use it to try signing in and to run `npm run test:e2e`
+after starting and resetting local Supabase. Playwright reads the local public
+credentials from `supabase status` unless `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` are set explicitly.
+
 ## Quality Checks & Testing
 
 | Command                   | Description                                                                |
