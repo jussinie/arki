@@ -57,7 +57,9 @@ credentials from `supabase status` unless `VITE_SUPABASE_URL` and
 
 ## Documentation & Architecture
 
-- **[`AGENTS.md`](./AGENTS.md)** — Working agreements, Definition of Done, module structure, enforced boundary rules, and standard commands.
+- **[`AGENTS.md`](./AGENTS.md)** — Project agent instructions, working agreements, Definition of Done, module structure, enforced boundary rules, and standard commands.
+- **[`docs/coding-principles.md`](./docs/coding-principles.md)** — Architecture layering, code quality attributes, code smells, refactoring, and design rules.
+- **[`docs/testing-and-security.md`](./docs/testing-and-security.md)** — TDD workflow, test quality, property testing, RLS/RPC security checklists, and Definition of Done.
 - **[`docs/adr/`](./docs/adr/)** — Architecture Decision Records (ADRs 0001–0010):
   - [ADR 1: Browser SPA with React, Vite and strict TypeScript](./docs/adr/0001-browser-spa-react-vite-strict-ts.md)
   - [ADR 2: Supabase for auth, data and access control](./docs/adr/0002-supabase-auth-data-rls.md)
