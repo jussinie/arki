@@ -1,0 +1,51 @@
+.water {
+  max-width: 24rem;
+  margin-top: 1.5rem;
+}
+
+.water h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.water__date {
+  display: block;
+  margin: 0.25rem 0 0;
+  color: #3f3a33;
+}
+
+.water__total {
+  margin: 1rem 0;
+}
+
+.water__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.water__amount {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.water__add {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: #243d32;
+  border: 0;
+  border-radius: 0.5rem;
+  touch-action: manipulation;
+}
+
+.water__add:focus-visible {
+  outline: 2px solid #243d32;
+  outline-offset: 2px;
+}

@@ -8,13 +8,20 @@ export type WaterEntry = {
 export const QUICK_ADD_WATER_ML = 250;
 
 export function waterTotalMl(
-  _entries: readonly WaterEntry[],
-  _localDate: string
+  entries: readonly WaterEntry[],
+  localDate: string
 ): number {
-  throw new Error('not implemented');
+  return entries.reduce((total, entry) => {
+    if (entry.localDate !== localDate) {
+      return total;
+    }
+    return total + entry.amountMl;
+  }, 0);
 }
 
 /** ADR 8: call when the user acts, then pass the id into the write. */
-export function createClientOpId(_generateId?: () => string): string {
-  throw new Error('not implemented');
+export function createClientOpId(
+  generateId: () => string = () => crypto.randomUUID()
+): string {
+  return generateId();
 }
