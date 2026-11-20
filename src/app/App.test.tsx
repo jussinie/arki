@@ -61,10 +61,13 @@ describe('App', () => {
       data: { session: { user } },
       error: null,
     });
-    render(<App />);
+    render(<App localDate="2026-11-20" />);
 
     expect(
       await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText('2026-11-20', { exact: true })
     ).toBeInTheDocument();
     expect(
       await screen.findByText('0 ml', { exact: true })
