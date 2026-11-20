@@ -6,6 +6,7 @@ import { App } from './App';
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
   signInWithPassword: vi.fn(),
+  signOut: vi.fn(),
 }));
 vi.mock('../shared/supabase', () => ({ supabase: { auth } }));
 
@@ -64,5 +65,34 @@ describe('App', () => {
       await screen.findByRole('heading', { name: 'Today' })
     ).toBeInTheDocument();
     expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+  });
+
+  it('returns to the sign-in page after sign-out', async () => {
+    let signedIn = true;
+    auth.getSession.mockImplementation(async () => ({
+      data: { session: signedIn ? { user } : null },
+      error: null,
+    }));
+    auth.signOut.mockImplementation(async () => {
+      signedIn = false;
+      return { error: null };
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Today' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Sign out' })
+    ).not.toBeInTheDocument();
   });
 });
