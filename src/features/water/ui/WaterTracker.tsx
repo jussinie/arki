@@ -1,6 +1,5 @@
 import {
   QUICK_ADD_WATER_DL,
-  QUICK_ADD_WATER_ML,
   createClientOpId,
   waterMlFromDl,
   waterTotalMl,
@@ -46,15 +45,6 @@ export function WaterTracker({
             <span className="water__amount">{totalMl} ml</span>
           </p>
           <div className="water__actions">
-            <button
-              className="water__add water__add--wide"
-              type="button"
-              onClick={() => {
-                handleAddWater(QUICK_ADD_WATER_ML);
-              }}
-            >
-              Add {QUICK_ADD_WATER_ML} ml
-            </button>
             {QUICK_ADD_WATER_DL.map((dl) => (
               <button
                 key={dl}
@@ -64,7 +54,7 @@ export function WaterTracker({
                   handleAddWater(waterMlFromDl(dl));
                 }}
               >
-                Add {dl} dl
+                {dl} dl
               </button>
             ))}
           </div>

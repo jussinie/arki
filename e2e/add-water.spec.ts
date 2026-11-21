@@ -28,16 +28,19 @@ async function signIn(page: Page) {
 test.describe('Add water to today', () => {
   test.use({ timezoneId: 'UTC' });
 
-  test('adding 250 ml shows 250 ml for 2026-11-20 until reload', async ({
+  test('adding 2 dl shows 200 ml for 2026-11-20 until reload', async ({
     page,
   }) => {
     await signIn(page);
 
     await expect(page.getByText(STORY_DAY, { exact: true })).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /250|2[,.]5/ })).toHaveCount(
+      0
+    );
 
-    await page.getByRole('button', { name: 'Add 250 ml' }).click();
-    await expect(page.getByText('250 ml', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '2 dl', exact: true }).click();
+    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toHaveCount(0);
 
     await page.reload();
@@ -45,7 +48,7 @@ test.describe('Add water to today', () => {
       page.getByRole('heading', { name: 'Today', exact: true })
     ).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
-    await expect(page.getByText('250 ml', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('200 ml', { exact: true })).toHaveCount(0);
   });
 
   test('1, 2, 3, and 4 dl add 100, 200, 300, and 400 ml until reload', async ({
@@ -53,22 +56,30 @@ test.describe('Add water to today', () => {
   }) => {
     await signIn(page);
 
-    await expect(page.getByRole('button', { name: 'Add 1 dl' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add 2 dl' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add 3 dl' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add 4 dl' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '1 dl', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '2 dl', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '3 dl', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '4 dl', exact: true })
+    ).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add 1 dl' }).click();
+    await page.getByRole('button', { name: '1 dl', exact: true }).click();
     await expect(page.getByText('100 ml', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add 2 dl' }).click();
+    await page.getByRole('button', { name: '2 dl', exact: true }).click();
     await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add 3 dl' }).click();
+    await page.getByRole('button', { name: '3 dl', exact: true }).click();
     await expect(page.getByText('600 ml', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add 4 dl' }).click();
+    await page.getByRole('button', { name: '4 dl', exact: true }).click();
     await expect(page.getByText('1000 ml', { exact: true })).toBeVisible();
 
     await page.reload();
@@ -86,7 +97,7 @@ test.describe('Add water on a phone', () => {
   test('the add button fits and stays tappable', async ({ page }) => {
     await signIn(page);
 
-    const add = page.getByRole('button', { name: 'Add 250 ml' });
+    const add = page.getByRole('button', { name: '2 dl', exact: true });
     await expect(add).toBeVisible();
     const box = await add.boundingBox();
     expect(box).not.toBeNull();
@@ -101,14 +112,14 @@ test.describe('Add water on a phone', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
 
     await add.click();
-    await expect(page.getByText('250 ml', { exact: true })).toBeVisible();
+    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
   });
 
   test('the decilitre buttons fit and stay tappable', async ({ page }) => {
     await signIn(page);
 
-    for (const name of ['Add 1 dl', 'Add 2 dl', 'Add 3 dl', 'Add 4 dl']) {
-      const button = page.getByRole('button', { name });
+    for (const name of ['1 dl', '2 dl', '3 dl', '4 dl']) {
+      const button = page.getByRole('button', { name, exact: true });
       await expect(button).toBeVisible();
       const box = await button.boundingBox();
       expect(box).not.toBeNull();
@@ -123,7 +134,7 @@ test.describe('Add water on a phone', () => {
     }));
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
 
-    await page.getByRole('button', { name: 'Add 2 dl' }).click();
+    await page.getByRole('button', { name: '2 dl', exact: true }).click();
     await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
   });
 });

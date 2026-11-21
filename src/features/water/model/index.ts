@@ -4,9 +4,6 @@ export type WaterEntry = {
   localDate: string;
 };
 
-/** First quick-add size. Amount limits are enforced with the rest of W-2. */
-export const QUICK_ADD_WATER_ML = 250;
-
 export const ML_PER_DL = 100;
 
 export const QUICK_ADD_WATER_DL = [1, 2, 3, 4] as const;

@@ -34,7 +34,7 @@ describe('App', () => {
     );
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Add 250 ml' })
+      screen.queryByRole('button', { name: /^1 dl$/ })
     ).not.toBeInTheDocument();
   });
 
@@ -57,7 +57,7 @@ describe('App', () => {
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
   });
 
-  it('adds 250 ml of water on today after sign-in', async () => {
+  it('adds 2 dl of water on today after sign-in', async () => {
     auth.getSession.mockResolvedValue({
       data: { session: { user } },
       error: null,
@@ -73,9 +73,9 @@ describe('App', () => {
     expect(
       await screen.findByText('0 ml', { exact: true })
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add 250 ml' }));
+    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
     expect(
-      await screen.findByText('250 ml', { exact: true })
+      await screen.findByText('200 ml', { exact: true })
     ).toBeInTheDocument();
   });
 

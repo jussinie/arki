@@ -51,10 +51,6 @@
   touch-action: manipulation;
 }
 
-.water__add--wide {
-  grid-column: 1 / -1;
-}
-
 .water__add:focus-visible {
   outline: 2px solid #243d32;
   outline-offset: 2px;

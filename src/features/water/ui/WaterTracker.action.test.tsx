@@ -43,15 +43,15 @@ describe('WaterTracker add action', () => {
     render(<WaterTracker localDate="2026-11-20" createOpId={createOpId} />);
     expect(createOpId).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add 250 ml' }));
+    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
 
     expect(order).toEqual(['create', 'send']);
     expect(addWater.mutate).toHaveBeenCalledExactlyOnceWith({
       id: 'op-from-the-click',
-      amountMl: 250,
+      amountMl: 100,
       localDate: '2026-11-20',
     });
-    expect(screen.getByRole('button', { name: 'Add 250 ml' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^1 dl$/ })).toHaveAttribute(
       'type',
       'button'
     );
@@ -73,7 +73,9 @@ describe('WaterTracker add action', () => {
     expect(createOpId).not.toHaveBeenCalled();
 
     for (const dl of [1, 2, 3, 4]) {
-      fireEvent.click(screen.getByRole('button', { name: `Add ${dl} dl` }));
+      fireEvent.click(
+        screen.getByRole('button', { name: new RegExp(`^${dl} dl$`) })
+      );
     }
 
     expect(order).toEqual([
@@ -108,7 +110,7 @@ describe('WaterTracker add action', () => {
     });
     for (const dl of [1, 2, 3, 4]) {
       expect(
-        screen.getByRole('button', { name: `Add ${dl} dl` })
+        screen.getByRole('button', { name: new RegExp(`^${dl} dl$`) })
       ).toHaveAttribute('type', 'button');
     }
   });
