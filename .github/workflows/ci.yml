@@ -51,7 +51,7 @@ jobs:
 
       # Use the locked CLI from package-lock.json so CI matches local.
       - name: Start local Supabase
-        run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor
+        run: npx supabase start -x studio,imgproxy,vector,logflare,supavisor,mailpit
 
       - name: Reset database from migrations and seed
         run: npm run db:reset
