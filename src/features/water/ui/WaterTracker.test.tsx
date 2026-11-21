@@ -3,8 +3,121 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { clearMemoryWaterLog } from '../api';
 import { WaterTracker } from './WaterTracker';
+
+type StoredRow = {
+  id: string;
+  amount_ml: number;
+  local_date: string;
+  logged_at: string;
+};
+
+const db = vi.hoisted(() => {
+  const rows: StoredRow[] = [];
+  let nextSeq = 0;
+  let selectError: Error | null = null;
+  let upsertError: Error | null = null;
+
+  const from = vi.fn((_table: string) => ({
+    select: (_columns?: string) => ({
+      eq: (column: 'local_date' | 'id', value: string) => {
+        const filtered = rows.filter((row) => row[column] === value);
+        return {
+          order: async () => {
+            if (selectError) {
+              return { data: null, error: selectError };
+            }
+            return {
+              data: filtered.map(({ id, amount_ml, local_date }) => ({
+                id,
+                amount_ml,
+                local_date,
+              })),
+              error: null,
+            };
+          },
+          single: async () => {
+            const found = filtered[0];
+            if (!found) {
+              return {
+                data: null,
+                error: new Error(`Row not found for ${column}=${value}`),
+              };
+            }
+            return {
+              data: {
+                id: found.id,
+                amount_ml: found.amount_ml,
+                local_date: found.local_date,
+              },
+              error: null,
+            };
+          },
+        };
+      },
+    }),
+    upsert: (
+      payload: { id: string; amount_ml: number; local_date: string },
+      options?: { ignoreDuplicates?: boolean }
+    ) => ({
+      select: () => ({
+        maybeSingle: async () => {
+          if (upsertError) {
+            return { data: null, error: upsertError };
+          }
+          const existing = rows.find((row) => row.id === payload.id);
+          if (existing) {
+            return options?.ignoreDuplicates
+              ? { data: null, error: null }
+              : {
+                  data: {
+                    id: existing.id,
+                    amount_ml: existing.amount_ml,
+                    local_date: existing.local_date,
+                  },
+                  error: null,
+                };
+          }
+          nextSeq += 1;
+          const stored: StoredRow = {
+            ...payload,
+            logged_at: String(nextSeq).padStart(8, '0'),
+          };
+          rows.push(stored);
+          return {
+            data: {
+              id: stored.id,
+              amount_ml: stored.amount_ml,
+              local_date: stored.local_date,
+            },
+            error: null,
+          };
+        },
+      }),
+    }),
+  }));
+
+  return {
+    from,
+    setSelectError(error: Error | null) {
+      selectError = error;
+    },
+    setUpsertError(error: Error | null) {
+      upsertError = error;
+    },
+    reset() {
+      rows.length = 0;
+      nextSeq = 0;
+      selectError = null;
+      upsertError = null;
+      from.mockClear();
+    },
+  };
+});
+
+vi.mock('../../../shared/supabase', () => ({
+  supabase: { from: db.from },
+}));
 
 vi.mock('../../../shared/date', () => ({
   getTodayLocalDate: () => {
@@ -37,7 +150,7 @@ function renderTracker(createOpId?: () => string) {
 }
 
 beforeEach(() => {
-  clearMemoryWaterLog();
+  db.reset();
 });
 
 describe('WaterTracker', () => {
@@ -111,5 +224,33 @@ describe('WaterTracker', () => {
       { id: 'op-dl-3', amountMl: 300, localDate: '2026-11-20' },
       { id: 'op-dl-4', amountMl: 400, localDate: '2026-11-20' },
     ]);
+  });
+
+  it('shows an error alert instead of 0 ml when loading water entries fails', async () => {
+    db.setSelectError(new Error('network error'));
+    renderTracker();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to load water entries. Please reload.'
+    );
+    expect(screen.queryByText('0 ml', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^1 dl$/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an error alert when adding water fails', async () => {
+    renderTracker(() => 'op-fail');
+    expect(
+      await screen.findByText('0 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    db.setUpsertError(new Error('insert failed'));
+    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not add water. Try again.'
+    );
+    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
   });
 });

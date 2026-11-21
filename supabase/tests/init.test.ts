@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../src/shared/supabase/database.types';
+import { addWaterEntry, listWaterEntries } from '../../src/features/water/api';
 
 type SupabaseStatusJson = {
   API_URL?: string;
@@ -107,6 +110,36 @@ async function fetchOrThrow(
   }
 }
 
+function createTestClient(
+  url: string,
+  anonKey: string
+): SupabaseClient<Database> {
+  return createClient<Database>(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+async function signInTestUser(
+  url: string,
+  anonKey: string,
+  email: string,
+  password: string
+): Promise<{ client: SupabaseClient<Database>; userId: string }> {
+  const client = createTestClient(url, anonKey);
+  const { data, error } = await client.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error || !data.user) {
+    throw error ?? new Error(`Failed to sign in synthetic user ${email}`);
+  }
+  return { client, userId: data.user.id };
+}
+
 describe('Supabase Local Database Integration', () => {
   it('connects to local Auth and PostgREST', async () => {
     const { url, anonKey } = getSupabaseCredentials();
@@ -130,5 +163,289 @@ describe('Supabase Local Database Integration', () => {
       baseUrl
     );
     expect(restResponse.ok).toBe(true);
+  });
+});
+
+describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
+  const TEST_PASSWORD = 'Arki-test-password-123!';
+  let anonClient: SupabaseClient<Database>;
+  let userAClient: SupabaseClient<Database>;
+  let userBClient: SupabaseClient<Database>;
+  let userAId: string;
+  const userACreatedIds: string[] = [];
+
+  beforeAll(async () => {
+    const { url, anonKey } = getSupabaseCredentials();
+    anonClient = createTestClient(url, anonKey);
+
+    const userA = await signInTestUser(
+      url,
+      anonKey,
+      'test@example.com',
+      TEST_PASSWORD
+    );
+    userAClient = userA.client;
+    userAId = userA.userId;
+
+    const userB = await signInTestUser(
+      url,
+      anonKey,
+      'other@example.com',
+      TEST_PASSWORD
+    );
+    userBClient = userB.client;
+  });
+
+  afterEach(async () => {
+    if (userACreatedIds.length > 0) {
+      await userAClient
+        .from('water_entries')
+        .delete()
+        .in('id', userACreatedIds);
+      userACreatedIds.length = 0;
+    }
+  });
+
+  afterAll(async () => {
+    await userAClient?.auth.signOut({ scope: 'local' });
+    await userBClient?.auth.signOut({ scope: 'local' });
+  });
+
+  it('prevents User B and anonymous callers from selecting, inserting, updating, or deleting User A water rows', async () => {
+    const entryId = crypto.randomUUID();
+    userACreatedIds.push(entryId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: entryId,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(insertError).toBeNull();
+
+    const { data: anonRead, error: anonReadError } = await anonClient
+      .from('water_entries')
+      .select('*')
+      .eq('id', entryId);
+    expect(anonReadError).toBeNull();
+    expect(anonRead).toEqual([]);
+
+    const { error: anonInsertError } = await anonClient
+      .from('water_entries')
+      .insert({
+        id: crypto.randomUUID(),
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(anonInsertError).not.toBeNull();
+
+    const { data: anonUpdate } = await anonClient
+      .from('water_entries')
+      .update({ amount_ml: 500 })
+      .eq('id', entryId)
+      .select();
+    expect(anonUpdate).toEqual([]);
+
+    const { data: anonDelete } = await anonClient
+      .from('water_entries')
+      .delete()
+      .eq('id', entryId)
+      .select();
+    expect(anonDelete).toEqual([]);
+
+    const { data: userBRead, error: userBReadError } = await userBClient
+      .from('water_entries')
+      .select('*')
+      .eq('id', entryId);
+    expect(userBReadError).toBeNull();
+    expect(userBRead).toEqual([]);
+
+    const { error: userBSpoofInsertError } = await userBClient
+      .from('water_entries')
+      .insert({
+        id: crypto.randomUUID(),
+        user_id: userAId,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(userBSpoofInsertError).not.toBeNull();
+
+    const { data: userBUpdate } = await userBClient
+      .from('water_entries')
+      .update({ amount_ml: 500 })
+      .eq('id', entryId)
+      .select();
+    expect(userBUpdate).toEqual([]);
+
+    const { data: userBDelete } = await userBClient
+      .from('water_entries')
+      .delete()
+      .eq('id', entryId)
+      .select();
+    expect(userBDelete).toEqual([]);
+
+    const { data: userARead, error: userAReadError } = await userAClient
+      .from('water_entries')
+      .select('id, amount_ml, local_date')
+      .eq('id', entryId)
+      .single();
+    expect(userAReadError).toBeNull();
+    expect(userARead).toEqual({
+      id: entryId,
+      amount_ml: 250,
+      local_date: '2026-11-20',
+    });
+  });
+
+  it('returns the existing row and creates no duplicate when inserting with a reused operation id', async () => {
+    const opId = crypto.randomUUID();
+    userACreatedIds.push(opId);
+
+    const first = await addWaterEntry(
+      { id: opId, amountMl: 250, localDate: '2026-11-20' },
+      userAClient
+    );
+    expect(first).toEqual({
+      id: opId,
+      amountMl: 250,
+      localDate: '2026-11-20',
+    });
+
+    const retried = await addWaterEntry(
+      { id: opId, amountMl: 400, localDate: '2026-11-20' },
+      userAClient
+    );
+    expect(retried).toEqual({
+      id: opId,
+      amountMl: 250,
+      localDate: '2026-11-20',
+    });
+
+    const { data: rows, error } = await userAClient
+      .from('water_entries')
+      .select('id, amount_ml, local_date')
+      .eq('id', opId);
+    expect(error).toBeNull();
+    expect(rows).toEqual([
+      { id: opId, amount_ml: 250, local_date: '2026-11-20' },
+    ]);
+  });
+
+  it('requires explicit local_date and never derives it from logged_at', async () => {
+    const { error: missingDateError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: crypto.randomUUID(),
+        amount_ml: 200,
+      } as never);
+    expect(missingDateError).not.toBeNull();
+
+    const entryId = crypto.randomUUID();
+    userACreatedIds.push(entryId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: entryId,
+        amount_ml: 200,
+        local_date: '2026-11-19',
+        logged_at: '2026-11-20T23:30:00Z',
+      });
+    expect(insertError).toBeNull();
+
+    const { data: readRow, error: readError } = await userAClient
+      .from('water_entries')
+      .select('id, amount_ml, local_date')
+      .eq('id', entryId)
+      .single();
+    expect(readError).toBeNull();
+    expect(readRow).toEqual({
+      id: entryId,
+      amount_ml: 200,
+      local_date: '2026-11-19',
+    });
+  });
+
+  it('rejects water amounts outside 1..5000 ml', async () => {
+    for (const invalidAmount of [0, -100, 5001]) {
+      const { error } = await userAClient.from('water_entries').insert({
+        id: crypto.randomUUID(),
+        amount_ml: invalidAmount,
+        local_date: '2026-11-20',
+      });
+      expect(error).not.toBeNull();
+    }
+
+    for (const validAmount of [1, 5000]) {
+      const validId = crypto.randomUUID();
+      userACreatedIds.push(validId);
+      const { error } = await userAClient.from('water_entries').insert({
+        id: validId,
+        amount_ml: validAmount,
+        local_date: '2026-11-20',
+      });
+      expect(error).toBeNull();
+    }
+  });
+
+  it('lists only the authenticated user entries for the requested local_date in logged_at order', async () => {
+    const firstId = crypto.randomUUID();
+    const secondId = crypto.randomUUID();
+    const otherDayId = crypto.randomUUID();
+    userACreatedIds.push(firstId, secondId, otherDayId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert([
+        {
+          id: secondId,
+          amount_ml: 200,
+          local_date: '2026-11-20',
+          logged_at: '2026-11-20T09:00:00Z',
+        },
+        {
+          id: firstId,
+          amount_ml: 100,
+          local_date: '2026-11-20',
+          logged_at: '2026-11-20T08:00:00Z',
+        },
+        {
+          id: otherDayId,
+          amount_ml: 300,
+          local_date: '2026-11-19',
+          logged_at: '2026-11-19T12:00:00Z',
+        },
+      ]);
+    expect(insertError).toBeNull();
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: firstId, amountMl: 100, localDate: '2026-11-20' },
+      { id: secondId, amountMl: 200, localDate: '2026-11-20' },
+    ]);
+    await expect(listWaterEntries('2026-11-20', userBClient)).resolves.toEqual(
+      []
+    );
+  });
+
+  it('rejects cross-user id collision via addWaterEntry without overwriting User A row', async () => {
+    const sharedId = crypto.randomUUID();
+    userACreatedIds.push(sharedId);
+
+    await addWaterEntry(
+      { id: sharedId, amountMl: 250, localDate: '2026-11-20' },
+      userAClient
+    );
+
+    await expect(
+      addWaterEntry(
+        { id: sharedId, amountMl: 400, localDate: '2026-11-20' },
+        userBClient
+      )
+    ).rejects.toMatchObject({ message: expect.any(String) });
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: sharedId, amountMl: 250, localDate: '2026-11-20' },
+    ]);
   });
 });
