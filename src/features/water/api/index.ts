@@ -97,3 +97,35 @@ export function useAddWater() {
     },
   });
 }
+
+export async function readWaterGoalMl(
+  _client: WaterSupabaseClient = supabase
+): Promise<number> {
+  throw new Error('Not implemented');
+}
+
+export async function saveWaterGoalMl(
+  _goalMl: number,
+  _userId: string,
+  _client: WaterSupabaseClient = supabase
+): Promise<number> {
+  throw new Error('Not implemented');
+}
+
+export function useWaterGoal(): {
+  data: number | undefined;
+  isSuccess: boolean;
+  isPending: boolean;
+  isError: boolean;
+} {
+  throw new Error('Not implemented');
+}
+
+export function useSetWaterGoal(): {
+  mutate: (goalMl: number) => void;
+  mutateAsync: (goalMl: number) => Promise<number>;
+  isError: boolean;
+  isPending: boolean;
+} {
+  throw new Error('Not implemented');
+}

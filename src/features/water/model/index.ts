@@ -32,3 +32,37 @@ export function createClientOpId(
 ): string {
   return generateId();
 }
+
+export const DEFAULT_WATER_GOAL_ML = 2000;
+export const MIN_WATER_GOAL_ML = 100;
+export const MAX_WATER_GOAL_ML = 10000;
+export const WATER_GOAL_RANGE_MESSAGE = 'Enter a goal between 0.1 and 10 L';
+
+export function parseWaterGoalInput(_raw: string): number {
+  throw new Error('Not implemented');
+}
+
+export function formatWaterGoalLiters(_goalMl: number): string {
+  throw new Error('Not implemented');
+}
+
+export function waterGoalFillRatio(
+  _consumedMl: number,
+  _goalMl: number
+): number {
+  throw new Error('Not implemented');
+}
+
+export function waterGoalFillPercent(
+  _consumedMl: number,
+  _goalMl: number
+): number {
+  throw new Error('Not implemented');
+}
+
+export function isWaterGoalReached(
+  _consumedMl: number,
+  _goalMl: number
+): boolean {
+  throw new Error('Not implemented');
+}

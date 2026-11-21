@@ -2,7 +2,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/shared/supabase/database.types';
-import { addWaterEntry, listWaterEntries } from '../../src/features/water/api';
+import {
+  addWaterEntry,
+  listWaterEntries,
+  readWaterGoalMl,
+  saveWaterGoalMl,
+} from '../../src/features/water/api';
 
 type SupabaseStatusJson = {
   API_URL?: string;
@@ -492,5 +497,203 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
     await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
       { id: sharedId, amountMl: 250, localDate: '2026-11-20' },
     ]);
+  });
+});
+
+describe('water_goals table and RLS (ARK-33)', () => {
+  const TEST_PASSWORD = 'Arki-test-password-123!';
+  let anonClient: SupabaseClient<Database>;
+  let userAClient: SupabaseClient<Database>;
+  let userBClient: SupabaseClient<Database>;
+  let userAId: string;
+  let userBId: string;
+  const createdWaterIds: string[] = [];
+
+  function goals(client: SupabaseClient<Database>) {
+    return (client as unknown as SupabaseClient).from('water_goals');
+  }
+
+  beforeAll(async () => {
+    const { url, anonKey } = getSupabaseCredentials();
+    anonClient = createTestClient(url, anonKey);
+
+    const userA = await signInTestUser(
+      url,
+      anonKey,
+      'test@example.com',
+      TEST_PASSWORD
+    );
+    userAClient = userA.client;
+    userAId = userA.userId;
+
+    const userB = await signInTestUser(
+      url,
+      anonKey,
+      'other@example.com',
+      TEST_PASSWORD
+    );
+    userBClient = userB.client;
+    userBId = userB.userId;
+  });
+
+  afterEach(async () => {
+    if (createdWaterIds.length > 0) {
+      await userAClient
+        .from('water_entries')
+        .delete()
+        .in('id', createdWaterIds);
+      createdWaterIds.length = 0;
+    }
+    for (const client of [userAClient, userBClient]) {
+      const { error } = await goals(client).delete().gte('goal_ml', 100);
+      if (error && error.code !== 'PGRST205') {
+        throw error;
+      }
+    }
+  });
+
+  afterAll(async () => {
+    await userAClient?.auth.signOut({ scope: 'local' });
+    await userBClient?.auth.signOut({ scope: 'local' });
+  });
+
+  it('stores one goal per user and does not keep a local date', async () => {
+    await expect(readWaterGoalMl(userAClient)).resolves.toBe(2000);
+
+    await expect(saveWaterGoalMl(2500, userAId, userAClient)).resolves.toBe(
+      2500
+    );
+    await expect(saveWaterGoalMl(1800, userAId, userAClient)).resolves.toBe(
+      1800
+    );
+
+    const { data: rows, error: readError } =
+      await goals(userAClient).select('user_id, goal_ml');
+    expect(readError).toBeNull();
+    expect(rows).toEqual([{ user_id: userAId, goal_ml: 1800 }]);
+
+    const { error: dateColumnError } =
+      await goals(userAClient).select('local_date');
+    expect(dateColumnError).not.toBeNull();
+
+    const firstWaterId = crypto.randomUUID();
+    const secondWaterId = crypto.randomUUID();
+    createdWaterIds.push(firstWaterId, secondWaterId);
+    await addWaterEntry(
+      { id: firstWaterId, amountMl: 250, localDate: '2026-11-20' },
+      userAClient
+    );
+    await addWaterEntry(
+      { id: secondWaterId, amountMl: 400, localDate: '2026-11-19' },
+      userAClient
+    );
+
+    await expect(readWaterGoalMl(userAClient)).resolves.toBe(1800);
+    await expect(readWaterGoalMl(userBClient)).resolves.toBe(2000);
+  });
+
+  it('rejects goals outside 100..10000 ml', async () => {
+    for (const invalid of [0, 99, 10001, -1]) {
+      const { error } = await goals(userAClient).insert({ goal_ml: invalid });
+      expect(error).not.toBeNull();
+    }
+
+    for (const valid of [100, 10000]) {
+      const { error: clearError } = await goals(userAClient)
+        .delete()
+        .gte('goal_ml', 100);
+      expect(clearError).toBeNull();
+      const { error } = await goals(userAClient).insert({ goal_ml: valid });
+      expect(error).toBeNull();
+    }
+  });
+
+  it('prevents anonymous callers and User B from reading or changing User A goal', async () => {
+    const { error: insertError } = await goals(userAClient).insert({
+      goal_ml: 2200,
+    });
+    expect(insertError).toBeNull();
+
+    const { data: ownerRow, error: ownerError } = await goals(userAClient)
+      .select('user_id, goal_ml')
+      .single();
+    expect(ownerError).toBeNull();
+    expect(ownerRow).toEqual({ user_id: userAId, goal_ml: 2200 });
+
+    const { data: anonRead, error: anonReadError } =
+      await goals(anonClient).select('*');
+    expect(anonReadError).toBeNull();
+    expect(anonRead).toEqual([]);
+
+    const { error: anonInsertError } = await goals(anonClient).insert({
+      goal_ml: 2000,
+    });
+    expect(anonInsertError).not.toBeNull();
+
+    const { data: anonUpdate } = await goals(anonClient)
+      .update({ goal_ml: 3000 })
+      .eq('user_id', userAId)
+      .select();
+    expect(anonUpdate).toEqual([]);
+
+    const { data: anonDelete } = await goals(anonClient)
+      .delete()
+      .eq('user_id', userAId)
+      .select();
+    expect(anonDelete).toEqual([]);
+
+    const { data: userBRead, error: userBReadError } = await goals(userBClient)
+      .select('*')
+      .eq('user_id', userAId);
+    expect(userBReadError).toBeNull();
+    expect(userBRead).toEqual([]);
+
+    const { error: spoofInsertError } = await goals(userBClient).insert({
+      user_id: userAId,
+      goal_ml: 3000,
+    });
+    expect(spoofInsertError).not.toBeNull();
+
+    const { error: spoofUpsertError } = await goals(userBClient).upsert(
+      { user_id: userAId, goal_ml: 3000 },
+      { onConflict: 'user_id' }
+    );
+    expect(spoofUpsertError).not.toBeNull();
+
+    const { data: userBUpdate } = await goals(userBClient)
+      .update({ goal_ml: 3000 })
+      .eq('user_id', userAId)
+      .select();
+    expect(userBUpdate).toEqual([]);
+
+    const { data: userBDelete } = await goals(userBClient)
+      .delete()
+      .eq('user_id', userAId)
+      .select();
+    expect(userBDelete).toEqual([]);
+
+    const { data: stillOwner, error: stillOwnerError } = await goals(
+      userAClient
+    )
+      .select('user_id, goal_ml')
+      .single();
+    expect(stillOwnerError).toBeNull();
+    expect(stillOwner).toEqual({ user_id: userAId, goal_ml: 2200 });
+
+    const { error: userBOwnGoalError } = await goals(userBClient).insert({
+      goal_ml: 3000,
+    });
+    expect(userBOwnGoalError).toBeNull();
+
+    const { data: userBOwn, error: userBOwnError } = await goals(userBClient)
+      .select('user_id, goal_ml')
+      .single();
+    expect(userBOwnError).toBeNull();
+    expect(userBOwn).toEqual({ user_id: userBId, goal_ml: 3000 });
+
+    const { data: userAStill, error: userAStillError } =
+      await goals(userAClient).select('goal_ml');
+    expect(userAStillError).toBeNull();
+    expect(userAStill).toEqual([{ goal_ml: 2200 }]);
   });
 });
