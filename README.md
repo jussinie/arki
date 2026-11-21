@@ -55,6 +55,35 @@ credentials from `supabase status` unless `VITE_SUPABASE_URL` and
 | `npm run test:e2e`        | Build, preview, and run Playwright end-to-end tests                        |
 | `npm run db:types:check`  | Regenerate `src/shared/supabase/database.types.ts` and verify no git drift |
 
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci.yml`) runs a two-tier pipeline:
+
+1. **`ci` (verification gate)** — on every pull request and every push to `main`. Formatting, lint, typecheck, boundary tests, unit tests, local Supabase, generated-type drift, RLS/RPC tests, and Playwright Chromium E2E must all pass.
+2. **`deploy` (staging delivery)** — only after a green `ci` job on a push to `main`. Pushes migrations to the staging Supabase project, builds the SPA with staging public env vars, and deploys `dist/` to Cloudflare Pages.
+
+Dependabot (`.github/dependabot.yml`) opens weekly update PRs for `npm` and `github-actions`.
+
+### Required GitHub Actions secrets
+
+Configure these under repository **Settings → Secrets and variables → Actions** before the first deploy from `main`:
+
+| Secret                          | Purpose                                                    |
+| ------------------------------- | ---------------------------------------------------------- |
+| `VITE_SUPABASE_URL`             | Staging Supabase project URL                               |
+| `VITE_SUPABASE_ANON_KEY`        | Staging Supabase public anon key                           |
+| `SUPABASE_PROJECT_ID`           | Staging Supabase project ref (for `supabase db push`)      |
+| `SUPABASE_ACCESS_TOKEN`         | Supabase access token for CLI migration push               |
+| `SUPABASE_DB_PASSWORD`          | Staging database password for `supabase db push`           |
+| `CLOUDFLARE_API_TOKEN`          | Cloudflare API token with Pages edit permission            |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                      |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | Target Cloudflare Pages project name (e.g. `arki-staging`) |
+
+### Repository settings
+
+- Enable **secret scanning** and **push protection**.
+- Protect `main` and require the **CI / Verification gate** check so style, lint, type, boundary, type-drift, and test failures block merges.
+
 ## Documentation & Architecture
 
 - **[`AGENTS.md`](./AGENTS.md)** — Project agent instructions, working agreements, Definition of Done, module structure, enforced boundary rules, and standard commands.
