@@ -119,6 +119,19 @@ async function requireUserId(): Promise<string> {
   return userId;
 }
 
+export const MISSING_WATER_GOAL_TABLE_MESSAGE =
+  'Local database is missing water_goals. Run npm run db:reset, then reload.';
+
+export function isMissingWaterGoalTableError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  if (!('code' in error)) {
+    return false;
+  }
+  return error.code === 'PGRST205';
+}
+
 export async function readWaterGoalMl(
   client: WaterSupabaseClient = supabase
 ): Promise<number> {

@@ -18,6 +18,7 @@ const db = vi.hoisted(() => {
   const entries: EntryRow[] = [];
   const goals: GoalRow[] = [];
   let nextSeq = 0;
+  let goalReadError: { code: string; message: string } | Error | null = null;
   let goalWriteError: Error | null = null;
 
   const from = vi.fn((table: string) => {
@@ -25,6 +26,9 @@ const db = vi.hoisted(() => {
       return {
         select: () => ({
           maybeSingle: async () => {
+            if (goalReadError) {
+              return { data: null, error: goalReadError };
+            }
             const row = goals[0];
             return {
               data: row ? { goal_ml: row.goal_ml } : null,
@@ -127,6 +131,9 @@ const db = vi.hoisted(() => {
   return {
     from,
     goals,
+    setGoalReadError(error: { code: string; message: string } | Error | null) {
+      goalReadError = error;
+    },
     setGoalWriteError(error: Error | null) {
       goalWriteError = error;
     },
@@ -134,6 +141,7 @@ const db = vi.hoisted(() => {
       entries.length = 0;
       goals.length = 0;
       nextSeq = 0;
+      goalReadError = null;
       goalWriteError = null;
       from.mockClear();
     },
@@ -339,6 +347,22 @@ describe('WaterTracker daily goal', () => {
     }
 
     expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2500 }]);
+  });
+
+  it('tells the user to reset the local database when water_goals is missing', async () => {
+    db.setGoalReadError({
+      code: 'PGRST205',
+      message:
+        "Could not find the table 'public.water_goals' in the schema cache",
+    });
+    renderTracker();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Local database is missing water_goals. Run npm run db:reset, then reload.'
+    );
+    expect(
+      screen.queryByLabelText('Daily water goal (L)')
+    ).not.toBeInTheDocument();
   });
 
   it('shows an error when saving the goal fails and leaves the previous goal', async () => {

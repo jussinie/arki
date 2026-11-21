@@ -5,6 +5,8 @@ import {
   waterTotalMl,
 } from '../model';
 import {
+  MISSING_WATER_GOAL_TABLE_MESSAGE,
+  isMissingWaterGoalTableError,
   useAddWater,
   useSetWaterGoal,
   useWaterDay,
@@ -60,7 +62,9 @@ export function WaterTracker({
             <p role="status">Loading water goal…</p>
           ) : goal.isError || goal.data === undefined ? (
             <p className="water__error" role="alert">
-              Unable to load the water goal. Please reload.
+              {isMissingWaterGoalTableError(goal.error)
+                ? MISSING_WATER_GOAL_TABLE_MESSAGE
+                : 'Unable to load the water goal. Please reload.'}
             </p>
           ) : (
             <WaterGoalMeter

@@ -3,6 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  MISSING_WATER_GOAL_TABLE_MESSAGE,
+  isMissingWaterGoalTableError,
   readWaterGoalMl,
   saveWaterGoalMl,
   useSetWaterGoal,
@@ -149,6 +151,19 @@ describe('readWaterGoalMl', () => {
     const readError = new Error('permission denied');
     db.setReadError(readError);
     await expect(readWaterGoalMl()).rejects.toBe(readError);
+  });
+
+  it('recognizes PostgREST missing-table errors from a stale local schema', () => {
+    const missingTable = {
+      code: 'PGRST205',
+      message:
+        "Could not find the table 'public.water_goals' in the schema cache",
+    };
+    expect(isMissingWaterGoalTableError(missingTable)).toBe(true);
+    expect(isMissingWaterGoalTableError(new Error('permission denied'))).toBe(
+      false
+    );
+    expect(MISSING_WATER_GOAL_TABLE_MESSAGE).toContain('npm run db:reset');
   });
 });
 

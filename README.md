@@ -30,6 +30,11 @@ Arki is a responsive browser single-page application for food and water tracking
    npm run db:reset
    ```
 
+   `db:start` reuses an existing local database. After pulling a schema change
+   (for example `water_goals`), run `npm run db:reset` or `npm run db:migrate`
+   so PostgREST can see the new tables. `PGRST205` means that reset has not
+   happened yet.
+
 4. **Start the Vite development server:**
 
    ```bash

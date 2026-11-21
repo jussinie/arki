@@ -55,21 +55,21 @@ These 4 boundary rules are enforced in CI via `dependency-cruiser` ([`.dependenc
 
 All `package.json` scripts follow these exact names so local development, `AGENTS.md`, and CI stay in sync:
 
-| Command                   | Purpose                                                                      |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| `npm ci`                  | Clean install dependencies from `package-lock.json`                          |
-| `npm run dev`             | Start local Vite dev server                                                  |
-| `npm run build`           | Type-check and build production SPA into `dist/`                             |
-| `npm run preview`         | Preview built SPA locally on port `4173`                                     |
-| `npm run format`          | Format all files with Prettier (`npm run format:check` in CI)                |
-| `npm run lint`            | Run static lint and boundary checks (`lint:eslint` + `lint:boundaries`)      |
-| `npm run typecheck`       | Run strict TypeScript compiler check (`tsc --noEmit`)                        |
-| `npm run test:boundaries` | Verify `dependency-cruiser` rejects deliberate boundary violations           |
-| `npm run test:unit`       | Run unit, component & `fast-check` property tests (`src/**/*.test.{ts,tsx}`) |
-| `npm run test:db`         | Run integration tests against local Supabase (`supabase/tests/init.test.ts`) |
-| `npm run test:e2e`        | Run Playwright E2E browser tests (`e2e/**/*.spec.ts`)                        |
-| `npm run db:start`        | Start local Supabase containers (`db:stop` to stop, `db:reset` to reseed)    |
-| `npm run db:types`        | Regenerate `database.types.ts` (`db:types:check` fails on drift in CI)       |
+| Command                   | Purpose                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm ci`                  | Clean install dependencies from `package-lock.json`                                                                                                   |
+| `npm run dev`             | Start local Vite dev server                                                                                                                           |
+| `npm run build`           | Type-check and build production SPA into `dist/`                                                                                                      |
+| `npm run preview`         | Preview built SPA locally on port `4173`                                                                                                              |
+| `npm run format`          | Format all files with Prettier (`npm run format:check` in CI)                                                                                         |
+| `npm run lint`            | Run static lint and boundary checks (`lint:eslint` + `lint:boundaries`)                                                                               |
+| `npm run typecheck`       | Run strict TypeScript compiler check (`tsc --noEmit`)                                                                                                 |
+| `npm run test:boundaries` | Verify `dependency-cruiser` rejects deliberate boundary violations                                                                                    |
+| `npm run test:unit`       | Run unit, component & `fast-check` property tests (`src/**/*.test.{ts,tsx}`)                                                                          |
+| `npm run test:db`         | Run integration tests against local Supabase (`supabase/tests/init.test.ts`)                                                                          |
+| `npm run test:e2e`        | Run Playwright E2E browser tests (`e2e/**/*.spec.ts`)                                                                                                 |
+| `npm run db:start`        | Start local Supabase and apply pending migrations (`db:stop` to stop, `db:reset` to reseed, `db:migrate` to apply new migrations without wiping data) |
+| `npm run db:types`        | Regenerate `database.types.ts` (`db:types:check` fails on drift in CI)                                                                                |
 
 - **Pre-PR full verification gate (required before any PR):**
   `npm run format:check && npm run lint && npm run typecheck && npm run test:boundaries && npm run test:unit && npm run db:types:check && npm run test:db && npm run test:e2e`
