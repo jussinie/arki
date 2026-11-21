@@ -8,12 +8,59 @@ const auth = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
 }));
-vi.mock('../shared/supabase', () => ({ supabase: { auth } }));
+
+const db = vi.hoisted(() => {
+  const rows: Array<{ id: string; amount_ml: number; local_date: string }> = [];
+
+  const from = vi.fn((_table: string) => ({
+    select: () => ({
+      eq: (column: 'local_date' | 'id', value: string) => {
+        const filtered = rows.filter((row) => row[column] === value);
+        return {
+          order: async () => ({ data: [...filtered], error: null }),
+          single: async () => ({
+            data: filtered[0] ?? null,
+            error: filtered[0] ? null : new Error('Row not found'),
+          }),
+        };
+      },
+    }),
+    upsert: (
+      payload: { id: string; amount_ml: number; local_date: string },
+      options?: { ignoreDuplicates?: boolean }
+    ) => ({
+      select: () => ({
+        maybeSingle: async () => {
+          const existing = rows.find((row) => row.id === payload.id);
+          if (existing) {
+            return options?.ignoreDuplicates
+              ? { data: null, error: null }
+              : { data: existing, error: null };
+          }
+          const stored = { ...payload };
+          rows.push(stored);
+          return { data: stored, error: null };
+        },
+      }),
+    }),
+  }));
+
+  return {
+    from,
+    reset() {
+      rows.length = 0;
+      from.mockClear();
+    },
+  };
+});
+
+vi.mock('../shared/supabase', () => ({ supabase: { auth, from: db.from } }));
 
 const user = { id: 'synthetic-user', email: 'test@example.com' };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  db.reset();
   auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
 });
 
