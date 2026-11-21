@@ -11,6 +11,10 @@ import {
 
 type GoalRow = { user_id: string; goal_ml: number };
 
+const auth = vi.hoisted(() => ({
+  userId: 'user-1',
+}));
+
 const db = vi.hoisted(() => {
   const goals: GoalRow[] = [];
   let readError: Error | null = null;
@@ -98,7 +102,11 @@ vi.mock('../../../shared/supabase', () => ({
     from: db.from,
     auth: {
       getSession: async () => ({
-        data: { session: { user: { id: 'user-1' } } },
+        data: {
+          session: {
+            user: { id: auth.userId, email: `${auth.userId}@example.com` },
+          },
+        },
         error: null,
       }),
     },
@@ -121,6 +129,7 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  auth.userId = 'user-1';
   db.reset();
 });
 
@@ -194,5 +203,36 @@ describe('useWaterGoal', () => {
 
     await waitFor(() => expect(result.current.goal.data).toBe(2500));
     expect(db.goals).toEqual([{ user_id: 'user-1', goal_ml: 2500 }]);
+  });
+
+  it('does not keep another signed-in user goal in the cache', async () => {
+    db.goals.push({ user_id: 'user-1', goal_ml: 2500 });
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    });
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+    }
+
+    const { result } = renderHook(() => useWaterGoal(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.data).toBe(2500));
+
+    auth.userId = 'user-2';
+    db.goals[0] = { user_id: 'user-2', goal_ml: 3000 };
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['session'] });
+    });
+
+    await waitFor(() => expect(result.current.data).toBe(3000));
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500);
+    expect(queryClient.getQueryData(['water-goal', 'user-2'])).toBe(3000);
   });
 });

@@ -191,6 +191,11 @@ async function saveGoal(liters: string) {
   const input = await screen.findByLabelText('Daily water goal (L)');
   fireEvent.change(input, { target: { value: liters } });
   fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+  const goalMl = Math.round(Number(liters.replace(',', '.')) * 1000);
+  await screen.findByRole('progressbar', {
+    name: 'Daily water goal',
+    value: { max: goalMl },
+  });
 }
 
 beforeEach(() => {
@@ -273,6 +278,11 @@ describe('WaterTracker daily goal', () => {
     expect(
       await screen.findByText('400 ml', { exact: true })
     ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('progressbar', { name: 'Daily water goal' })
+        .querySelector('.water__bar-fill')
+    ).toHaveStyle({ width: '40%' });
     expect(
       screen.queryByRole('img', { name: 'Goal reached' })
     ).not.toBeInTheDocument();

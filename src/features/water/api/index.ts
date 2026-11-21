@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { useCurrentSession } from '../../session';
 import { supabase, type Database } from '../../../shared/supabase';
-import type { WaterEntry } from '../model';
+import {
+  DEFAULT_WATER_GOAL_ML,
+  assertWaterGoalMl,
+  type WaterEntry,
+} from '../model';
 
 type WaterSupabaseClient = Pick<SupabaseClient<Database>, 'from'>;
 
@@ -98,34 +103,97 @@ export function useAddWater() {
   });
 }
 
+function waterGoalQueryKey(userId: string) {
+  return ['water-goal', userId] as const;
+}
+
+async function requireUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    throw error;
+  }
+  const userId = data.session?.user.id;
+  if (!userId) {
+    throw new Error('Not signed in');
+  }
+  return userId;
+}
+
 export async function readWaterGoalMl(
-  _client: WaterSupabaseClient = supabase
+  client: WaterSupabaseClient = supabase
 ): Promise<number> {
-  throw new Error('Not implemented');
+  const { data, error } = await client
+    .from('water_goals')
+    .select('goal_ml')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data?.goal_ml ?? DEFAULT_WATER_GOAL_ML;
 }
 
 export async function saveWaterGoalMl(
-  _goalMl: number,
-  _userId: string,
-  _client: WaterSupabaseClient = supabase
+  goalMl: number,
+  userId: string,
+  client: WaterSupabaseClient = supabase
 ): Promise<number> {
-  throw new Error('Not implemented');
+  const validGoalMl = assertWaterGoalMl(goalMl);
+  const { data, error } = await client
+    .from('water_goals')
+    .upsert(
+      { user_id: userId, goal_ml: validGoalMl },
+      { onConflict: 'user_id' }
+    )
+    .select('goal_ml')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data.goal_ml;
 }
 
-export function useWaterGoal(): {
-  data: number | undefined;
-  isSuccess: boolean;
-  isPending: boolean;
-  isError: boolean;
-} {
-  throw new Error('Not implemented');
+export function useWaterGoal() {
+  const session = useCurrentSession();
+  const userId = session.data?.userId ?? null;
+  return useQuery({
+    queryKey: ['water-goal', userId],
+    enabled: userId !== null,
+    queryFn: () => readWaterGoalMl(),
+  });
 }
 
-export function useSetWaterGoal(): {
-  mutate: (goalMl: number) => void;
-  mutateAsync: (goalMl: number) => Promise<number>;
-  isError: boolean;
-  isPending: boolean;
-} {
-  throw new Error('Not implemented');
+export function useSetWaterGoal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    scope: { id: 'water-goal' },
+    mutationFn: async (goalMl: number) => {
+      const userId = await requireUserId();
+      const savedGoalMl = await saveWaterGoalMl(goalMl, userId);
+      return { userId, goalMl: savedGoalMl };
+    },
+    onMutate: async (goalMl) => {
+      const userId = await requireUserId();
+      const queryKey = waterGoalQueryKey(userId);
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<number>(queryKey);
+      queryClient.setQueryData(queryKey, assertWaterGoalMl(goalMl));
+      return { previous, userId };
+    },
+    onError: (_error, _goalMl, context) => {
+      if (!context) {
+        return;
+      }
+      const queryKey = waterGoalQueryKey(context.userId);
+      if (context.previous === undefined) {
+        queryClient.removeQueries({ queryKey });
+        return;
+      }
+      queryClient.setQueryData(queryKey, context.previous);
+    },
+    onSuccess: ({ userId, goalMl }) => {
+      queryClient.setQueryData(waterGoalQueryKey(userId), goalMl);
+    },
+  });
 }

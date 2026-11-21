@@ -71,14 +71,10 @@ async function clearGoalUserData(): Promise<void> {
   }
 
   const { error: deleteGoalError } = await client
-    .from('water_goals' as 'water_entries')
+    .from('water_goals')
     .delete()
-    .gte('goal_ml' as 'amount_ml', 100);
-  if (
-    deleteGoalError &&
-    deleteGoalError.code !== 'PGRST205' &&
-    deleteGoalError.code !== '42703'
-  ) {
+    .gte('goal_ml', 100);
+  if (deleteGoalError) {
     throw deleteGoalError;
   }
 }

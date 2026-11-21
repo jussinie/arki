@@ -510,7 +510,7 @@ describe('water_goals table and RLS (ARK-33)', () => {
   const createdWaterIds: string[] = [];
 
   function goals(client: SupabaseClient<Database>) {
-    return (client as unknown as SupabaseClient).from('water_goals');
+    return client.from('water_goals');
   }
 
   beforeAll(async () => {

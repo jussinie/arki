@@ -20,6 +20,7 @@ const db = vi.hoisted(() => {
 
   const from = vi.fn((_table: string) => ({
     select: (_columns?: string) => ({
+      maybeSingle: async () => ({ data: null, error: null }),
       eq: (column: 'local_date' | 'id', value: string) => {
         const filtered = rows.filter((row) => row[column] === value);
         return {
@@ -116,7 +117,19 @@ const db = vi.hoisted(() => {
 });
 
 vi.mock('../../../shared/supabase', () => ({
-  supabase: { from: db.from },
+  supabase: {
+    from: db.from,
+    auth: {
+      getSession: async () => ({
+        data: {
+          session: {
+            user: { id: 'synthetic-user', email: 'test@example.com' },
+          },
+        },
+        error: null,
+      }),
+    },
+  },
 }));
 
 vi.mock('../../../shared/date', () => ({

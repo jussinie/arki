@@ -59,6 +59,22 @@ export type Database = {
         };
         Relationships: [];
       };
+      water_goals: {
+        Row: {
+          goal_ml: number;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          goal_ml: number;
+          user_id?: string;
+        };
+        Update: {
+          goal_ml?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

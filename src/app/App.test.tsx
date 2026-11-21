@@ -14,6 +14,7 @@ const db = vi.hoisted(() => {
 
   const from = vi.fn((_table: string) => ({
     select: () => ({
+      maybeSingle: async () => ({ data: null, error: null }),
       eq: (column: 'local_date' | 'id', value: string) => {
         const filtered = rows.filter((row) => row[column] === value);
         return {
