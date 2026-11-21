@@ -31,6 +31,9 @@ describe('sanitizeReturnPath', () => {
       'http://evil.example',
       '//evil.example/phish',
       '///evil.example',
+      '/.//evil.example',
+      '/..//evil.example',
+      '/a/..//evil.example',
       '/\\evil.example',
       '\\evil.example',
       'javascript:alert(1)',
@@ -48,9 +51,26 @@ describe('sanitizeReturnPath', () => {
     }
   });
 
-  it('never returns an external origin, protocol-relative URL, or /sign-in loop for arbitrary strings', () => {
+  it('never returns an external origin, protocol-relative URL, or /sign-in loop for arbitrary strings or dot-segment combinations', () => {
+    const segmentArb = fc.constantFrom(
+      '',
+      '.',
+      '..',
+      '/',
+      '//',
+      '\\',
+      'sign-in',
+      'days',
+      'evil.example',
+      '?redirect=/days',
+      '#water'
+    );
+    const craftedPathArb = fc
+      .array(segmentArb, { minLength: 1, maxLength: 6 })
+      .map((parts) => `/${parts.join('/')}`);
+
     fc.assert(
-      fc.property(fc.string(), (raw) => {
+      fc.property(fc.oneof(fc.string(), craftedPathArb), (raw) => {
         const result = sanitizeReturnPath(raw);
         if (result !== null) {
           expect(result.startsWith('/')).toBe(true);
@@ -58,6 +78,8 @@ describe('sanitizeReturnPath', () => {
           expect(result.includes('\\')).toBe(false);
           const parsed = new URL(result, 'https://arki.local');
           expect(parsed.origin).toBe('https://arki.local');
+          expect(parsed.pathname.startsWith('/')).toBe(true);
+          expect(parsed.pathname.startsWith('//')).toBe(false);
           expect(parsed.pathname).not.toBe(SIGN_IN_PATH);
           expect(parsed.pathname.startsWith(`${SIGN_IN_PATH}/`)).toBe(false);
         }
@@ -138,6 +160,9 @@ describe('getGuardRedirect', () => {
     ).toBe('/days/2026-11-19');
     expect(
       getGuardRedirect({ pathname: '/sign-in', search: '', hash: '' }, true)
+    ).toBe('/');
+    expect(
+      getGuardRedirect({ pathname: '/sign-in/', search: '', hash: '' }, true)
     ).toBe('/');
     expect(
       getGuardRedirect(

@@ -37,20 +37,39 @@ function SessionView({ localDate }: { localDate: string }) {
   const session = useCurrentSession();
   const signOut = useSignOut();
   const { pathname, search, hash, replace } = useAppLocation();
+  const isAuthenticated = Boolean(session.data);
+  const { isSuccess: isSignOutSuccess, reset: resetSignOut } = signOut;
 
   const guardRedirect = resolveRouteRedirect({
     location: { pathname, search, hash },
     isPending: session.isPending,
     isError: session.isError,
-    isAuthenticated: Boolean(session.data),
-    isSigningOut: signOut.isPending || signOut.isSuccess,
+    isAuthenticated,
+    isSigningOut: signOut.isPending || isSignOutSuccess,
   });
 
   useEffect(() => {
     if (guardRedirect !== null) {
       replace(guardRedirect);
+      return;
     }
-  }, [guardRedirect, replace]);
+    if (
+      isSignOutSuccess &&
+      (isAuthenticated ||
+        (pathname === SIGN_IN_PATH && search === '' && hash === ''))
+    ) {
+      resetSignOut();
+    }
+  }, [
+    guardRedirect,
+    hash,
+    isAuthenticated,
+    isSignOutSuccess,
+    pathname,
+    replace,
+    resetSignOut,
+    search,
+  ]);
 
   if (session.isPending) return <p role="status">Loading…</p>;
   if (session.isError)

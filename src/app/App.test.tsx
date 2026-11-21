@@ -61,6 +61,7 @@ const user = { id: 'synthetic-user', email: 'test@example.com' };
 beforeEach(() => {
   vi.resetAllMocks();
   db.reset();
+  window.history.replaceState(null, '', '/');
   auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
 });
 
@@ -291,5 +292,16 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe('/sign-in');
     expect(window.location.search).toBe('');
+
+    // After sign-out settles, a subsequent deep-link navigation via popstate
+    // must still preserve the requested path in ?redirect=.
+    window.history.pushState(null, '', '/library?q=oats');
+    fireEvent(window, new PopStateEvent('popstate'));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('?redirect=%2Flibrary%3Fq%3Doats');
   });
 });

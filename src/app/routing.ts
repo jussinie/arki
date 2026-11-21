@@ -41,7 +41,12 @@ export function sanitizeReturnPath(
 
   try {
     const parsed = new URL(candidate, DUMMY_ORIGIN);
-    if (parsed.origin !== DUMMY_ORIGIN || isSignInPath(parsed.pathname)) {
+    if (
+      parsed.origin !== DUMMY_ORIGIN ||
+      !parsed.pathname.startsWith('/') ||
+      parsed.pathname.startsWith('//') ||
+      isSignInPath(parsed.pathname)
+    ) {
       return null;
     }
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
@@ -80,7 +85,7 @@ export function getGuardRedirect(
     );
   }
 
-  if (location.pathname === SIGN_IN_PATH) {
+  if (isSignInPath(location.pathname)) {
     return resolvePostSignInPath(location.search);
   }
 
