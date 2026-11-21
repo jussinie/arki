@@ -235,9 +235,14 @@ If an Edge Function or custom HTTP endpoint is introduced, enforce and test chec
 
 ---
 
-## 9. Multi-Agent Roles, Write Allowlists & Independent Review
+## 9. Multi-Agent Roles, Git Worktrees, Write Allowlists & Independent Review
 
 - **Execution Brief & Write Allowlist:** Before modifying code, define the goal, acceptance criteria, exact write allowlist (paths/globs), read-only inputs, and required verification commands. Do not modify files outside the allowlist without amending the plan.
+- **Git Worktree Isolation (`.worktrees/<slug>`):**
+  - **When required:** Create an isolated worktree (`git worktree add -b <branch> .worktrees/<slug> origin/main`) whenever the root working copy has uncommitted user edits, when running autonomous background tasks, or when running parallel agents with disjoint write allowlists. Single-agent interactive work on a clean root checkout may run directly in the root workspace.
+  - **Environment setup:** Copy untracked local config (`.env.local`) if needed and run a clean `npm ci` inside the worktree. Never symlink `node_modules` across worktrees (symlinks break `dependency-cruiser` realpath resolution and Vite module boundaries).
+  - **Shared stateful resources (No concurrent DB or port `4173` runs):** Git worktrees isolate the filesystem, not Docker containers or TCP ports. Never run `npm run db:reset`, `npm run db:types:check`, `npm run test:db` (local Supabase), or `npm run test:e2e` (port `4173`) concurrently across worktrees. Before running `npm run test:e2e`, ensure no other worktree's preview server is bound to `127.0.0.1:4173` (or run `CI=1 npm run test:e2e` so Playwright refuses to reuse an existing server).
+  - **Teardown & cleanup:** After the PR is merged (or handed off and closed), remove the worktree without `--force` first (`git worktree remove .worktrees/<slug> && git worktree prune`) so untracked or uncommitted work is never silently destroyed.
 - **Discovery Before Implementation:** When hardening or extending existing modules, run a read-only discovery phase first to inventory all affected features, ADRs, migrations, RLS policies, environment variables, and test coverage gaps.
 - **Independent Read-Only Review:** The agent or author that wrote the implementation cannot supply its own independent review. Before publishing a behavior-changing PR:
   1. Delegate review to a **fresh, read-only subagent** (or separate model) with zero implementation context bias.
@@ -260,4 +265,4 @@ A story counts as done only when it meets every item below; partially done work 
 - [ ] Applicable Section 6 & 7 security items tested; `npm audit` and secret checks clean; seed and test fixtures remain 100% synthetic
 - [ ] Code is refactored; any new architectural choice is recorded as a new ADR in `docs/adr/`
 - [ ] Feature exercised end-to-end against the real local runtime (`npm run dev` / `npm run preview` + local Supabase)
-- [ ] Fresh independent read-only review completed, all findings resolved, PR self-reviewed in GitHub, CI green, and deployed to staging
+- [ ] Fresh independent read-only review completed, all findings resolved, PR self-reviewed in GitHub, CI green, deployed to staging, and any temporary `.worktrees/<slug>` worktree removed and pruned post-merge

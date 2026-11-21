@@ -76,7 +76,7 @@ All `package.json` scripts follow these exact names so local development, `AGENT
 
 ## 5. Roles, Review, Merge Tiers & Definition of Done
 
-- **One file, one owner:** Use a single implementer for coupled changes; use parallel agents only in isolated worktrees with non-overlapping write allowlists.
+- **One file, one owner & Git worktrees (`.worktrees/<slug>`):** Use a single implementer for coupled changes. Use an isolated worktree under `.worktrees/<slug>` (with `npm ci`, never symlinked `node_modules`) whenever the root working copy is dirty, for autonomous background runs, or for parallel agents with disjoint write allowlists; serialize `db:reset`/`test:db` and port `4173` (`test:e2e`), and clean up merged worktrees via `git worktree remove` + `git worktree prune` (see [`docs/testing-and-security.md`](./docs/testing-and-security.md) §9).
 - **Independent review:** Before any behavior-changing PR, a fresh read-only reviewer (separate subagent or model) must review the spec, full diff, and test evidence per [`docs/testing-and-security.md`](./docs/testing-and-security.md) §9. The author cannot self-approve.
 - **Tier 1 (Explicit human merge approval; auto-merge OFF):** Schema/migrations (`supabase/migrations/`), RLS policies and RPCs, auth/security (`src/features/session/`, `src/shared/supabase/`), core nutrition calculation contract (`src/nutrition/`), library import (`tools/import/`), secrets/infra/CI, breaking changes, or major user journeys.
 - **Tier 2 (Auto-merge candidate after green gate + independent review):** Targeted bug fixes, UI polish, tooling/tests, or minor internal refactors.
