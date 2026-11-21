@@ -3,6 +3,11 @@ import * as fc from 'fast-check';
 import {
   QUICK_ADD_WATER_DL,
   createClientOpId,
+  formatWaterGoalLiters,
+  isWaterGoalReached,
+  parseWaterGoalInput,
+  waterGoalFillPercent,
+  waterGoalFillRatio,
   waterMlFromDl,
   waterTotalMl,
 } from './index';
@@ -61,6 +66,120 @@ describe('waterMlFromDl', () => {
     expect(waterMlFromDl(2)).toBe(200);
     expect(waterMlFromDl(3)).toBe(300);
     expect(waterMlFromDl(4)).toBe(400);
+  });
+});
+
+describe('water goal', () => {
+  it('parses liter amounts inside 0.1 L and 10 L into millilitres', () => {
+    expect(parseWaterGoalInput('0.1')).toBe(100);
+    expect(parseWaterGoalInput('0,1')).toBe(100);
+    expect(parseWaterGoalInput('2')).toBe(2000);
+    expect(parseWaterGoalInput('2.5')).toBe(2500);
+    expect(parseWaterGoalInput('2,5')).toBe(2500);
+    expect(parseWaterGoalInput(' 2.5 ')).toBe(2500);
+    expect(parseWaterGoalInput('2.001')).toBe(2001);
+    expect(parseWaterGoalInput('10')).toBe(10000);
+    expect(parseWaterGoalInput('02')).toBe(2000);
+  });
+
+  it('rejects blank, zero, and out-of-range liter amounts', () => {
+    for (const invalid of [
+      '',
+      '   ',
+      '0',
+      '0.0',
+      '0.099',
+      '10.001',
+      '10.1',
+      '-1',
+      'abc',
+      '2 L',
+      '2.5.1',
+      '.',
+      '2.',
+      '.5',
+      'NaN',
+      'Infinity',
+      '1e1',
+    ]) {
+      expect(() => parseWaterGoalInput(invalid)).toThrow(
+        'Enter a goal between 0.1 and 10 L'
+      );
+    }
+  });
+
+  it('formats a stored millilitre goal as liters', () => {
+    expect(formatWaterGoalLiters(2000)).toBe('2');
+    expect(formatWaterGoalLiters(2500)).toBe('2.5');
+    expect(formatWaterGoalLiters(2250)).toBe('2.25');
+    expect(formatWaterGoalLiters(2001)).toBe('2.001');
+    expect(formatWaterGoalLiters(100)).toBe('0.1');
+    expect(formatWaterGoalLiters(10000)).toBe('10');
+  });
+
+  it('round-trips every whole millilitre goal from 0.1 L through 10 L', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 100, max: 10000 }), (goalMl) => {
+        expect(parseWaterGoalInput(formatWaterGoalLiters(goalMl))).toBe(goalMl);
+      })
+    );
+  });
+
+  it('fills the bar up to the goal and no further', () => {
+    expect(waterGoalFillRatio(0, 2000)).toBe(0);
+    expect(waterGoalFillPercent(0, 2000)).toBe(0);
+    expect(isWaterGoalReached(0, 2000)).toBe(false);
+
+    expect(waterGoalFillRatio(2000, 2000)).toBe(1);
+    expect(waterGoalFillPercent(2000, 2000)).toBe(100);
+    expect(isWaterGoalReached(2000, 2000)).toBe(true);
+
+    expect(waterGoalFillRatio(2500, 2000)).toBe(1);
+    expect(waterGoalFillPercent(2500, 2000)).toBe(100);
+    expect(isWaterGoalReached(2500, 2000)).toBe(true);
+
+    expect(waterGoalFillRatio(1999, 2000)).toBeLessThan(1);
+    expect(waterGoalFillPercent(1999, 2000)).toBeLessThan(100);
+    expect(isWaterGoalReached(1999, 2000)).toBe(false);
+  });
+
+  it('does not fill or mark the goal reached when the goal is not positive', () => {
+    expect(waterGoalFillRatio(500, 0)).toBe(0);
+    expect(waterGoalFillPercent(500, 0)).toBe(0);
+    expect(isWaterGoalReached(500, 0)).toBe(false);
+    expect(waterGoalFillRatio(500, -100)).toBe(0);
+    expect(isWaterGoalReached(-10, 2000)).toBe(false);
+  });
+
+  it('keeps the fill between empty and full for any consumed amount', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 20_000 }),
+        fc.integer({ min: 100, max: 10_000 }),
+        (consumedMl, goalMl) => {
+          const ratio = waterGoalFillRatio(consumedMl, goalMl);
+          const percent = waterGoalFillPercent(consumedMl, goalMl);
+          expect(ratio).toBeGreaterThanOrEqual(0);
+          expect(ratio).toBeLessThanOrEqual(1);
+          expect(percent).toBeGreaterThanOrEqual(0);
+          expect(percent).toBeLessThanOrEqual(100);
+          expect(isWaterGoalReached(consumedMl, goalMl)).toBe(
+            consumedMl >= goalMl
+          );
+          if (consumedMl >= goalMl) {
+            expect(ratio).toBe(1);
+            expect(percent).toBe(100);
+          } else {
+            expect(ratio).toBeLessThan(1);
+            expect(percent).toBeLessThan(100);
+          }
+          if (consumedMl === 0) {
+            expect(ratio).toBe(0);
+            expect(percent).toBe(0);
+          }
+        }
+      )
+    );
   });
 });
 

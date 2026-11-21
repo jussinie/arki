@@ -16,6 +16,17 @@ vi.mock('../api', () => ({
     isError: false,
   }),
   useAddWater: () => addWater,
+  useWaterGoal: () => ({
+    data: 2000,
+    isPending: false,
+    isSuccess: true,
+    isError: false,
+  }),
+  useSetWaterGoal: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+  }),
 }));
 
 vi.mock('../../../shared/date', () => ({

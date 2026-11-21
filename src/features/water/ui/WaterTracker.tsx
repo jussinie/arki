@@ -4,7 +4,13 @@ import {
   waterMlFromDl,
   waterTotalMl,
 } from '../model';
-import { useAddWater, useWaterDay } from '../api';
+import {
+  useAddWater,
+  useSetWaterGoal,
+  useWaterDay,
+  useWaterGoal,
+} from '../api';
+import { WaterGoalMeter } from './WaterGoalMeter';
 import './WaterTracker.css';
 
 type WaterTrackerProps = {
@@ -18,6 +24,8 @@ export function WaterTracker({
 }: WaterTrackerProps) {
   const day = useWaterDay(localDate);
   const addWater = useAddWater();
+  const goal = useWaterGoal();
+  const setGoal = useSetWaterGoal();
 
   function handleAddWater(amountMl: number) {
     const id = createOpId();
@@ -48,6 +56,23 @@ export function WaterTracker({
             <span className="water__label">Today's water total</span>
             <span className="water__amount">{totalMl} ml</span>
           </p>
+          {goal.isPending ? (
+            <p role="status">Loading water goal…</p>
+          ) : goal.isError || goal.data === undefined ? (
+            <p className="water__error" role="alert">
+              Unable to load the water goal. Please reload.
+            </p>
+          ) : (
+            <WaterGoalMeter
+              consumedMl={totalMl}
+              goalMl={goal.data}
+              saveError={setGoal.isError}
+              saving={setGoal.isPending}
+              onSave={(goalMl) => {
+                setGoal.mutate(goalMl);
+              }}
+            />
+          )}
           {addWater.isError ? (
             <p className="water__error" role="alert">
               Could not add water. Try again.
