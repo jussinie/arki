@@ -45,3 +45,33 @@ export function useSignIn() {
     },
   });
 }
+
+/**
+ * Ends the session on this device, then confirms the stored session is gone.
+ * Local scope removes the browser session before the server revoke, so a
+ * failed logout request cannot leave the user stuck in today's view.
+ */
+export async function signOut(): Promise<void> {
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  const { data, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (data.session?.user) {
+    throw error instanceof Error ? error : new Error('Could not sign out');
+  }
+}
+
+export function useSignOut() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await signOut();
+      // Clear before the mutation settles so today's view cannot paint
+      // from the previous cached session.
+      await queryClient.cancelQueries(
+        { queryKey: sessionKey },
+        { revert: false }
+      );
+      queryClient.setQueryData<Session | null>(sessionKey, null);
+    },
+  });
+}

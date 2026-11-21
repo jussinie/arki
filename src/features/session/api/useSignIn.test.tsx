@@ -2,11 +2,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCurrentSession, useCurrentSession, useSignIn } from './index';
+import {
+  getCurrentSession,
+  useCurrentSession,
+  useSignIn,
+  useSignOut,
+} from './index';
 
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
   signInWithPassword: vi.fn(),
+  signOut: vi.fn(),
 }));
 vi.mock('../../../shared/supabase', () => ({ supabase: { auth } }));
 
@@ -89,5 +95,48 @@ describe('session API', () => {
 
     expect(result.current.current.data).toBeNull();
     expect(auth.signInWithPassword).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the cached session when the device session is gone', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    const { result } = renderHook(
+      () => ({ current: useCurrentSession(), signOut: useSignOut() }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.current.data).toEqual(session));
+
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    auth.signOut.mockResolvedValue({ error: new Error('Failed to fetch') });
+
+    await act(async () => {
+      await result.current.signOut.mutateAsync();
+    });
+
+    expect(auth.signOut).toHaveBeenCalledExactlyOnceWith({ scope: 'local' });
+    await waitFor(() => expect(result.current.current.data).toBeNull());
+  });
+
+  it('keeps the cached session when sign-out leaves the user signed in', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    auth.signOut.mockResolvedValue({ error: new Error('nope') });
+    const { result } = renderHook(
+      () => ({ current: useCurrentSession(), signOut: useSignOut() }),
+      { wrapper: createWrapper() }
+    );
+    await waitFor(() => expect(result.current.current.data).toEqual(session));
+
+    await act(async () => {
+      await expect(result.current.signOut.mutateAsync()).rejects.toThrow(
+        'nope'
+      );
+    });
+
+    expect(result.current.current.data).toEqual(session);
   });
 });

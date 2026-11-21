@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SignInPage, useCurrentSession } from '../features/session';
+import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
 import { WaterTracker } from '../features/water';
 import { getTodayLocalDate } from '../shared/date';
 import './App.css';
 
 function SessionView({ localDate }: { localDate: string }) {
   const session = useCurrentSession();
+  const signOut = useSignOut();
 
   if (session.isPending) return <p role="status">Loading…</p>;
   if (session.isError)
@@ -16,10 +17,27 @@ function SessionView({ localDate }: { localDate: string }) {
   return (
     <main className="today">
       <header className="today__header">
-        <h1>Arki</h1>
-        <p className="today__email">{session.data.email}</p>
+        <div className="today__identity">
+          <h1>Arki</h1>
+          <p className="today__email">{session.data.email}</p>
+        </div>
+        <button
+          className="today__sign-out"
+          type="button"
+          disabled={signOut.isPending}
+          onClick={() => {
+            signOut.mutate();
+          }}
+        >
+          Sign out
+        </button>
       </header>
       <h2>Today</h2>
+      {signOut.isError ? (
+        <p className="today__error" role="alert">
+          Could not sign out. Try again.
+        </p>
+      ) : null}
       <WaterTracker localDate={localDate} />
     </main>
   );
