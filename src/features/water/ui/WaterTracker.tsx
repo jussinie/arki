@@ -38,12 +38,21 @@ export function WaterTracker({
       </time>
       {day.isPending ? (
         <p role="status">Loading water…</p>
+      ) : day.isError ? (
+        <p className="water__error" role="alert">
+          Unable to load water entries. Please reload.
+        </p>
       ) : (
         <>
           <p className="water__total" aria-live="polite">
             <span className="water__label">Today's water total</span>
             <span className="water__amount">{totalMl} ml</span>
           </p>
+          {addWater.isError ? (
+            <p className="water__error" role="alert">
+              Could not add water. Try again.
+            </p>
+          ) : null}
           <div className="water__actions">
             {QUICK_ADD_WATER_DL.map((dl) => (
               <button

@@ -20,7 +20,7 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local > src/shared/supabase/database.types.ts",
+    "db:types": "supabase gen types typescript --local > src/shared/supabase/database.types.ts && prettier --write src/shared/supabase/database.types.ts",
     "db:types:check": "npm run db:types && git diff --exit-code src/shared/supabase/database.types.ts"
   },
   "dependencies": {

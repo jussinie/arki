@@ -15,20 +15,27 @@ type StoredRow = {
 const db = vi.hoisted(() => {
   const rows: StoredRow[] = [];
   let nextSeq = 0;
+  let selectError: Error | null = null;
+  let upsertError: Error | null = null;
 
   const from = vi.fn((_table: string) => ({
     select: (_columns?: string) => ({
       eq: (column: 'local_date' | 'id', value: string) => {
         const filtered = rows.filter((row) => row[column] === value);
         return {
-          order: async () => ({
-            data: filtered.map(({ id, amount_ml, local_date }) => ({
-              id,
-              amount_ml,
-              local_date,
-            })),
-            error: null,
-          }),
+          order: async () => {
+            if (selectError) {
+              return { data: null, error: selectError };
+            }
+            return {
+              data: filtered.map(({ id, amount_ml, local_date }) => ({
+                id,
+                amount_ml,
+                local_date,
+              })),
+              error: null,
+            };
+          },
           single: async () => {
             const found = filtered[0];
             if (!found) {
@@ -55,6 +62,9 @@ const db = vi.hoisted(() => {
     ) => ({
       select: () => ({
         maybeSingle: async () => {
+          if (upsertError) {
+            return { data: null, error: upsertError };
+          }
           const existing = rows.find((row) => row.id === payload.id);
           if (existing) {
             return options?.ignoreDuplicates
@@ -89,9 +99,17 @@ const db = vi.hoisted(() => {
 
   return {
     from,
+    setSelectError(error: Error | null) {
+      selectError = error;
+    },
+    setUpsertError(error: Error | null) {
+      upsertError = error;
+    },
     reset() {
       rows.length = 0;
       nextSeq = 0;
+      selectError = null;
+      upsertError = null;
       from.mockClear();
     },
   };
@@ -206,5 +224,33 @@ describe('WaterTracker', () => {
       { id: 'op-dl-3', amountMl: 300, localDate: '2026-11-20' },
       { id: 'op-dl-4', amountMl: 400, localDate: '2026-11-20' },
     ]);
+  });
+
+  it('shows an error alert instead of 0 ml when loading water entries fails', async () => {
+    db.setSelectError(new Error('network error'));
+    renderTracker();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to load water entries. Please reload.'
+    );
+    expect(screen.queryByText('0 ml', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^1 dl$/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an error alert when adding water fails', async () => {
+    renderTracker(() => 'op-fail');
+    expect(
+      await screen.findByText('0 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    db.setUpsertError(new Error('insert failed'));
+    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not add water. Try again.'
+    );
+    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
   });
 });

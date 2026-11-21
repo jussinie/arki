@@ -244,9 +244,9 @@ describe('water Supabase API', () => {
       }),
     };
 
-    await expect(
-      listWaterEntries(today, failingClient as never)
-    ).rejects.toBe(queryError);
+    await expect(listWaterEntries(today, failingClient as never)).rejects.toBe(
+      queryError
+    );
   });
 
   it('propagates errors from addWaterEntry', async () => {
