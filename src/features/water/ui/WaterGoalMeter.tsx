@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   WATER_GOAL_RANGE_MESSAGE,
   formatWaterGoalLiters,
@@ -17,26 +17,22 @@ type WaterGoalMeterProps = {
   onSave: (goalMl: number) => void;
 };
 
-export function WaterGoalMeter({
-  consumedMl,
-  goalMl,
+type WaterGoalFormProps = {
+  savedLabel: string;
+  saveError: boolean;
+  saving: boolean;
+  onSave: (goalMl: number) => void;
+};
+
+function WaterGoalForm({
+  savedLabel,
   saveError,
   saving,
   onSave,
-}: WaterGoalMeterProps) {
-  const savedLabel = formatWaterGoalLiters(goalMl);
+}: WaterGoalFormProps) {
   const [draft, setDraft] = useState(savedLabel);
   const [inputError, setInputError] = useState<string | null>(null);
-  const reached = isWaterGoalReached(consumedMl, goalMl);
-  const shownConsumedMl = Number.isFinite(consumedMl)
-    ? Math.max(consumedMl, 0)
-    : 0;
   const message = inputError ?? (saveError ? SAVE_GOAL_ERROR : null);
-
-  useEffect(() => {
-    setDraft(savedLabel);
-    setInputError(null);
-  }, [savedLabel]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,6 +47,51 @@ export function WaterGoalMeter({
       );
     }
   }
+
+  return (
+    <>
+      <form className="water__goal-form" onSubmit={handleSubmit}>
+        <div className="water__goal-field">
+          <label htmlFor="water-goal">Daily water goal (L)</label>
+          <input
+            id="water-goal"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
+            value={draft}
+            aria-invalid={inputError !== null}
+            {...(message ? { 'aria-describedby': 'water-goal-error' } : {})}
+            onChange={(event) => {
+              setDraft(event.target.value);
+            }}
+          />
+        </div>
+        <button className="water__goal-save" type="submit" disabled={saving}>
+          Save goal
+        </button>
+      </form>
+      {message ? (
+        <p className="water__error" id="water-goal-error" role="alert">
+          {message}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+export function WaterGoalMeter({
+  consumedMl,
+  goalMl,
+  saveError,
+  saving,
+  onSave,
+}: WaterGoalMeterProps) {
+  const savedLabel = formatWaterGoalLiters(goalMl);
+  const reached = isWaterGoalReached(consumedMl, goalMl);
+  const shownConsumedMl = Number.isFinite(consumedMl)
+    ? Math.max(consumedMl, 0)
+    : 0;
 
   return (
     <div className="water__goal">
@@ -81,32 +122,13 @@ export function WaterGoalMeter({
           ) : null}
         </div>
       </div>
-      <form className="water__goal-form" onSubmit={handleSubmit}>
-        <div className="water__goal-field">
-          <label htmlFor="water-goal">Daily water goal (L)</label>
-          <input
-            id="water-goal"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            spellCheck={false}
-            value={draft}
-            aria-invalid={inputError !== null}
-            {...(message ? { 'aria-describedby': 'water-goal-error' } : {})}
-            onChange={(event) => {
-              setDraft(event.target.value);
-            }}
-          />
-        </div>
-        <button className="water__goal-save" type="submit" disabled={saving}>
-          Save goal
-        </button>
-      </form>
-      {message ? (
-        <p className="water__error" id="water-goal-error" role="alert">
-          {message}
-        </p>
-      ) : null}
+      <WaterGoalForm
+        key={savedLabel}
+        savedLabel={savedLabel}
+        saveError={saveError}
+        saving={saving}
+        onSave={onSave}
+      />
     </div>
   );
 }

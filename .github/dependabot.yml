@@ -20,10 +20,18 @@ updates:
         patterns:
           - '@testing-library*'
           - 'vitest*'
+      vite:
+        patterns:
+          - 'vite'
+          - '@vitejs/*'
     ignore:
       - dependency-name: '@eslint/js'
         update-types: ['version-update:semver-major']
       - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
