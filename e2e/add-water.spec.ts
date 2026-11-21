@@ -47,6 +47,37 @@ test.describe('Add water to today', () => {
     await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
     await expect(page.getByText('250 ml', { exact: true })).toHaveCount(0);
   });
+
+  test('1, 2, 3, and 4 dl add 100, 200, 300, and 400 ml until reload', async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    await expect(page.getByRole('button', { name: 'Add 1 dl' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add 2 dl' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add 3 dl' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add 4 dl' })).toBeVisible();
+    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add 1 dl' }).click();
+    await expect(page.getByText('100 ml', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add 2 dl' }).click();
+    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add 3 dl' }).click();
+    await expect(page.getByText('600 ml', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add 4 dl' }).click();
+    await expect(page.getByText('1000 ml', { exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(page.getByText('1000 ml', { exact: true })).toHaveCount(0);
+  });
 });
 
 test.describe('Add water on a phone', () => {
@@ -71,5 +102,28 @@ test.describe('Add water on a phone', () => {
 
     await add.click();
     await expect(page.getByText('250 ml', { exact: true })).toBeVisible();
+  });
+
+  test('the decilitre buttons fit and stay tappable', async ({ page }) => {
+    await signIn(page);
+
+    for (const name of ['Add 1 dl', 'Add 2 dl', 'Add 3 dl', 'Add 4 dl']) {
+      const button = page.getByRole('button', { name });
+      await expect(button).toBeVisible();
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    }
+
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+
+    await page.getByRole('button', { name: 'Add 2 dl' }).click();
+    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
   });
 });

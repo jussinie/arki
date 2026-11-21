@@ -64,4 +64,49 @@ describe('WaterTracker', () => {
       { id: 'op-click', amountMl: 250, localDate: '2026-11-20' },
     ]);
   });
+
+  it('adds 100, 200, 300, and 400 ml when the user clicks 1, 2, 3, and 4 dl', async () => {
+    let nextId = 0;
+    const createOpId = vi.fn(() => {
+      nextId += 1;
+      return `op-dl-${nextId}`;
+    });
+    const { queryClient } = renderTracker(createOpId);
+
+    expect(
+      await screen.findByRole('button', { name: 'Add 1 dl' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 2 dl' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 3 dl' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add 4 dl' })).toBeInTheDocument();
+    expect(createOpId).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 dl' }));
+    expect(
+      await screen.findByText('100 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 dl' }));
+    expect(
+      await screen.findByText('300 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add 3 dl' }));
+    expect(
+      await screen.findByText('600 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add 4 dl' }));
+    expect(
+      await screen.findByText('1000 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    expect(createOpId).toHaveBeenCalledTimes(4);
+    expect(queryClient.getQueryData(['water-entries', '2026-11-20'])).toEqual([
+      { id: 'op-dl-1', amountMl: 100, localDate: '2026-11-20' },
+      { id: 'op-dl-2', amountMl: 200, localDate: '2026-11-20' },
+      { id: 'op-dl-3', amountMl: 300, localDate: '2026-11-20' },
+      { id: 'op-dl-4', amountMl: 400, localDate: '2026-11-20' },
+    ]);
+  });
 });
