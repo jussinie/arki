@@ -1,13 +1,56 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
 import { WaterTracker } from '../features/water';
 import { getTodayLocalDate } from '../shared/date';
+import { SIGN_IN_PATH, getGuardRedirect } from './routing';
+import { useAppLocation } from './useAppLocation';
 import './App.css';
+
+function resolveRouteRedirect({
+  location,
+  isPending,
+  isError,
+  isAuthenticated,
+  isSigningOut,
+}: {
+  location: { pathname: string; search: string; hash: string };
+  isPending: boolean;
+  isError: boolean;
+  isAuthenticated: boolean;
+  isSigningOut: boolean;
+}): string | null {
+  if (isPending || isError) {
+    return null;
+  }
+  if (!isAuthenticated && isSigningOut) {
+    const isCleanSignIn =
+      location.pathname === SIGN_IN_PATH &&
+      location.search === '' &&
+      location.hash === '';
+    return isCleanSignIn ? null : SIGN_IN_PATH;
+  }
+  return getGuardRedirect(location, isAuthenticated);
+}
 
 function SessionView({ localDate }: { localDate: string }) {
   const session = useCurrentSession();
   const signOut = useSignOut();
+  const { pathname, search, hash, replace } = useAppLocation();
+
+  const guardRedirect = resolveRouteRedirect({
+    location: { pathname, search, hash },
+    isPending: session.isPending,
+    isError: session.isError,
+    isAuthenticated: Boolean(session.data),
+    isSigningOut: signOut.isPending || signOut.isSuccess,
+  });
+
+  useEffect(() => {
+    if (guardRedirect !== null) {
+      replace(guardRedirect);
+    }
+  }, [guardRedirect, replace]);
 
   if (session.isPending) return <p role="status">Loading…</p>;
   if (session.isError)
