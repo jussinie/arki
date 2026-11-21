@@ -28,7 +28,7 @@ test.describe('Sign-in page', () => {
         .getByLabel('Email')
         .evaluate((el: HTMLInputElement) => el.validity.valueMissing)
     ).toBe(true);
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/sign-in');
 
     await page.getByLabel('Email').fill('test@example.com');
     await page.getByRole('button', { name: 'Sign in' }).click();
