@@ -62,6 +62,7 @@ const user = { id: 'synthetic-user', email: 'test@example.com' };
 beforeEach(() => {
   vi.resetAllMocks();
   db.reset();
+  window.history.replaceState(null, '', '/');
   auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
 });
 
@@ -190,5 +191,118 @@ describe('App', () => {
     expect(
       screen.queryByRole('button', { name: 'Sign out' })
     ).not.toBeInTheDocument();
+  });
+
+  it('redirects signed-out users from / to /sign-in', async () => {
+    window.history.replaceState(null, '', '/');
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('');
+  });
+
+  it('bounces signed-out deep links to /sign-in and returns after sign-in', async () => {
+    window.history.replaceState(null, '', '/days/2026-11-19?tab=water');
+    auth.signInWithPassword.mockResolvedValue({ data: { user }, error: null });
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe(
+      '?redirect=%2Fdays%2F2026-11-19%3Ftab%3Dwater'
+    );
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/days/2026-11-19');
+    expect(window.location.search).toBe('?tab=water');
+  });
+
+  it('ignores unsafe redirect targets and sends signed-in users to /', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/sign-in?redirect=https%3A%2F%2Fevil.example'
+    );
+    auth.signInWithPassword.mockResolvedValue({ data: { user }, error: null });
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
+  });
+
+  it('redirects already signed-in users away from /sign-in to /', async () => {
+    window.history.replaceState(null, '', '/sign-in');
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('redirects to clean /sign-in without carrying deep-link params after sign-out', async () => {
+    window.history.replaceState(null, '', '/days/2026-11-19');
+    let signedIn = true;
+    auth.getSession.mockImplementation(async () => ({
+      data: { session: signedIn ? { user } : null },
+      error: null,
+    }));
+    auth.signOut.mockImplementation(async () => {
+      signedIn = false;
+      return { error: null };
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('');
+
+    // After sign-out settles, a subsequent deep-link navigation via popstate
+    // must still preserve the requested path in ?redirect=.
+    window.history.pushState(null, '', '/library?q=oats');
+    fireEvent(window, new PopStateEvent('popstate'));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('?redirect=%2Flibrary%3Fq%3Doats');
   });
 });
