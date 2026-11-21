@@ -417,3 +417,35 @@ describe('day navigation', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('selected-day presentation', () => {
+  it('formats the selected heading without changing the current URL', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { level: 2, name: 'Today' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Thu, 19 Nov 2026' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Sat, 21 Nov 2026' })
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Choose date'), {
+      target: { value: '2026-11-15' },
+    });
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Sun, 15 Nov 2026' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toBe('');
+  });
+});

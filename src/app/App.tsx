@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
 import { WaterTracker } from '../features/water';
-import { getTodayLocalDate } from '../shared/date';
+import { formatDisplayDate, getTodayLocalDate } from '../shared/date';
+import { DateNavigator } from './DateNavigator';
 import { SIGN_IN_PATH, getGuardRedirect } from './routing';
 import { useAppLocation } from './useAppLocation';
 import './App.css';
@@ -33,7 +34,15 @@ function resolveRouteRedirect({
   return getGuardRedirect(location, isAuthenticated);
 }
 
-function SessionView({ localDate }: { localDate: string }) {
+function SessionView({
+  localDate,
+  today,
+  onDateChange,
+}: {
+  localDate: string;
+  today: string;
+  onDateChange: (localDate: string) => void;
+}) {
   const session = useCurrentSession();
   const signOut = useSignOut();
   const { pathname, search, hash, replace } = useAppLocation();
@@ -94,7 +103,8 @@ function SessionView({ localDate }: { localDate: string }) {
           Sign out
         </button>
       </header>
-      <h2>Today</h2>
+      <h2>{localDate === today ? 'Today' : formatDisplayDate(localDate)}</h2>
+      <DateNavigator value={localDate} today={today} onChange={onDateChange} />
       {signOut.isError ? (
         <p className="today__error" role="alert">
           Could not sign out. Try again.
@@ -110,6 +120,7 @@ export function App({
 }: {
   localDate?: string;
 }) {
+  const [selectedDate, setSelectedDate] = useState(localDate);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -121,7 +132,11 @@ export function App({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionView localDate={localDate} />
+      <SessionView
+        localDate={selectedDate}
+        today={localDate}
+        onDateChange={setSelectedDate}
+      />
     </QueryClientProvider>
   );
 }

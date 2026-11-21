@@ -53,7 +53,7 @@ export function WaterTracker({
       ) : (
         <>
           <p className="water__total" aria-live="polite">
-            <span className="water__label">Today's water total</span>
+            <span className="water__label">Day's water total</span>
             <span className="water__amount">{totalMl} ml</span>
           </p>
           {goal.isPending ? (
