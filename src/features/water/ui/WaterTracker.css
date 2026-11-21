@@ -31,6 +31,12 @@
   line-height: 1.2;
 }
 
+.water__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
 .water__add {
   width: 100%;
   min-height: 2.75rem;
