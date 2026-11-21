@@ -306,3 +306,146 @@ describe('App', () => {
     expect(window.location.search).toBe('?redirect=%2Flibrary%3Fq%3Doats');
   });
 });
+
+describe('day navigation', () => {
+  beforeEach(() => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+  });
+
+  it('shows today, both arrows, and a native calendar picker when signed in', async () => {
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Today' })
+    ).toBeInTheDocument();
+    const picker = screen.getByLabelText('Choose date');
+    expect(picker).toHaveAttribute('type', 'date');
+    expect(picker).toHaveValue('2026-11-20');
+    expect(screen.getByRole('button', { name: 'Previous day' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Next day' })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Today' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('steps backward and forward into the future and jumps back to today', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { level: 2, name: 'Today' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-19');
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Today' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-21');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-20');
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Today' })
+    ).toBeInTheDocument();
+  });
+
+  it('loads and adds water for the picked day without changing today', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByText('0 ml', { exact: true });
+    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
+    await screen.findByText('200 ml', { exact: true });
+
+    fireEvent.change(screen.getByLabelText('Choose date'), {
+      target: { value: '2026-11-15' },
+    });
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-15');
+    expect(
+      await screen.findByText('0 ml', { exact: true })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Day's water total")).toBeInTheDocument();
+    expect(screen.queryByText("Today's water total")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^3 dl$/ }));
+    expect(
+      await screen.findByText('300 ml', { exact: true })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(
+      await screen.findByText('200 ml', { exact: true })
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Choose date'), {
+      target: { value: '2026-11-15' },
+    });
+    expect(
+      await screen.findByText('300 ml', { exact: true })
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the selected day when the calendar is cleared or receives an invalid date', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { level: 2, name: 'Today' });
+
+    for (const value of ['', '2026-02-30', 'not-a-date']) {
+      fireEvent.change(screen.getByLabelText('Choose date'), {
+        target: { value },
+      });
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Today' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('2026-11-20', { exact: true })
+      ).toBeInTheDocument();
+    }
+  });
+
+  it('hides day navigation when signed out', async () => {
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+
+    expect(screen.queryByLabelText('Choose date')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Previous day' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Next day' })
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('selected-day presentation', () => {
+  it('formats the selected heading without changing the current URL', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { level: 2, name: 'Today' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Thu, 19 Nov 2026' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }));
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Sat, 21 Nov 2026' })
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Choose date'), {
+      target: { value: '2026-11-15' },
+    });
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Sun, 15 Nov 2026' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toBe('');
+  });
+});

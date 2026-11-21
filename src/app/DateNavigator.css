@@ -1,0 +1,51 @@
+.date-navigator {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 28rem;
+}
+
+.date-navigator__label {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.date-navigator button,
+.date-navigator input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.5rem;
+  font: inherit;
+  font-size: 16px;
+  color: #243d32;
+  background: #fff;
+  border: 1px solid #243d32;
+  border-radius: 0.5rem;
+}
+
+.date-navigator input {
+  width: 100%;
+}
+
+.date-navigator button {
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.date-navigator button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.date-navigator button:focus-visible,
+.date-navigator input:focus-visible {
+  outline: 2px solid #243d32;
+  outline-offset: 2px;
+}
+
+.date-navigator__today {
+  grid-column: 2;
+  justify-self: start;
+}
