@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { createClientOpId, waterTotalMl } from './index';
+import {
+  QUICK_ADD_WATER_DL,
+  createClientOpId,
+  waterMlFromDl,
+  waterTotalMl,
+} from './index';
 
 const today = '2026-11-20';
 
@@ -46,6 +51,16 @@ describe('waterTotalMl', () => {
         }
       )
     );
+  });
+});
+
+describe('waterMlFromDl', () => {
+  it('converts 1, 2, 3, and 4 dl into 100, 200, 300, and 400 ml', () => {
+    expect(QUICK_ADD_WATER_DL).toEqual([1, 2, 3, 4]);
+    expect(waterMlFromDl(1)).toBe(100);
+    expect(waterMlFromDl(2)).toBe(200);
+    expect(waterMlFromDl(3)).toBe(300);
+    expect(waterMlFromDl(4)).toBe(400);
   });
 });
 

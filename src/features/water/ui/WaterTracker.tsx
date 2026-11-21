@@ -1,4 +1,10 @@
-import { QUICK_ADD_WATER_ML, createClientOpId, waterTotalMl } from '../model';
+import {
+  QUICK_ADD_WATER_DL,
+  QUICK_ADD_WATER_ML,
+  createClientOpId,
+  waterMlFromDl,
+  waterTotalMl,
+} from '../model';
 import { useAddWater, useWaterDay } from '../api';
 import './WaterTracker.css';
 
@@ -14,11 +20,11 @@ export function WaterTracker({
   const day = useWaterDay(localDate);
   const addWater = useAddWater();
 
-  function handleAddWater() {
+  function handleAddWater(amountMl: number) {
     const id = createOpId();
     addWater.mutate({
       id,
-      amountMl: QUICK_ADD_WATER_ML,
+      amountMl,
       localDate,
     });
   }
@@ -39,9 +45,29 @@ export function WaterTracker({
             <span className="water__label">Today's water total</span>
             <span className="water__amount">{totalMl} ml</span>
           </p>
-          <button className="water__add" type="button" onClick={handleAddWater}>
-            Add {QUICK_ADD_WATER_ML} ml
-          </button>
+          <div className="water__actions">
+            <button
+              className="water__add water__add--wide"
+              type="button"
+              onClick={() => {
+                handleAddWater(QUICK_ADD_WATER_ML);
+              }}
+            >
+              Add {QUICK_ADD_WATER_ML} ml
+            </button>
+            {QUICK_ADD_WATER_DL.map((dl) => (
+              <button
+                key={dl}
+                className="water__add"
+                type="button"
+                onClick={() => {
+                  handleAddWater(waterMlFromDl(dl));
+                }}
+              >
+                Add {dl} dl
+              </button>
+            ))}
+          </div>
         </>
       )}
     </section>

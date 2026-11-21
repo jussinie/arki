@@ -76,9 +76,15 @@ describe('WaterTracker', () => {
     expect(
       await screen.findByRole('button', { name: 'Add 1 dl' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add 2 dl' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add 3 dl' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add 4 dl' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add 2 dl' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add 3 dl' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Add 4 dl' })
+    ).toBeInTheDocument();
     expect(createOpId).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add 1 dl' }));
