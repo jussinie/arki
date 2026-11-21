@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
+import { WaterTracker } from '../features/water';
+import { getTodayLocalDate } from '../shared/date';
 import './App.css';
 
-function SessionView() {
+function SessionView({ localDate }: { localDate: string }) {
   const session = useCurrentSession();
   const signOut = useSignOut();
 
@@ -36,11 +38,16 @@ function SessionView() {
           Could not sign out. Try again.
         </p>
       ) : null}
+      <WaterTracker localDate={localDate} />
     </main>
   );
 }
 
-export function App() {
+export function App({
+  localDate = getTodayLocalDate(),
+}: {
+  localDate?: string;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -52,7 +59,7 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionView />
+      <SessionView localDate={localDate} />
     </QueryClientProvider>
   );
 }

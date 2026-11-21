@@ -1,3 +1,1 @@
-export function WaterTracker() {
-  return null;
-}
+export { WaterTracker } from './WaterTracker';

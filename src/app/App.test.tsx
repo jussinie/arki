@@ -33,6 +33,9 @@ describe('App', () => {
       'password'
     );
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add 250 ml' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows Today and the authenticated email after signing in', async () => {
@@ -52,6 +55,28 @@ describe('App', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(user.email)).toBeInTheDocument();
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+
+  it('adds 250 ml of water on today after sign-in', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText('2026-11-20', { exact: true })
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText('0 ml', { exact: true })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add 250 ml' }));
+    expect(
+      await screen.findByText('250 ml', { exact: true })
+    ).toBeInTheDocument();
   });
 
   it('restores Today from an existing session', async () => {
