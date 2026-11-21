@@ -140,6 +140,29 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
   });
 
+  it('keeps Today visible and shows an error when sign-out fails', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    auth.signOut.mockResolvedValue({ error: new Error('nope') });
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not sign out. Try again.'
+    );
+    expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Sign in' })
+    ).not.toBeInTheDocument();
+  });
+
   it('returns to the sign-in page after sign-out', async () => {
     let signedIn = true;
     auth.getSession.mockImplementation(async () => ({

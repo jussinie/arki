@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCurrentSession,
+  signInWithPassword,
+  signOut,
   useCurrentSession,
   useSignIn,
   useSignOut,
@@ -51,6 +53,36 @@ describe('session API', () => {
 
   it('returns null when signed out', async () => {
     await expect(getCurrentSession()).resolves.toBeNull();
+  });
+
+  it('returns null when the persisted session has no user', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: null } },
+      error: null,
+    });
+    await expect(getCurrentSession()).resolves.toBeNull();
+  });
+
+  it('maps a missing user email to null', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: user.id } } },
+      error: null,
+    });
+    await expect(getCurrentSession()).resolves.toEqual({
+      userId: user.id,
+      email: null,
+    });
+  });
+
+  it('maps a missing email on sign-in to null', async () => {
+    auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: user.id } },
+      error: null,
+    });
+    await expect(signInWithPassword(credentials)).resolves.toEqual({
+      userId: user.id,
+      email: null,
+    });
   });
 
   it('propagates session errors', async () => {
@@ -138,5 +170,16 @@ describe('session API', () => {
     });
 
     expect(result.current.current.data).toEqual(session);
+  });
+
+  it('propagates getSession errors after local sign-out', async () => {
+    const sessionError = new Error('session store unreadable');
+    auth.signOut.mockResolvedValue({ error: null });
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: sessionError,
+    });
+
+    await expect(signOut()).rejects.toBe(sessionError);
   });
 });

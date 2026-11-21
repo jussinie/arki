@@ -367,6 +367,51 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
     });
   });
 
+  it('does not let the owner change a logged water amount', async () => {
+    const entryId = crypto.randomUUID();
+    userACreatedIds.push(entryId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: entryId,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(insertError).toBeNull();
+
+    const { data: ownerUpdate, error: ownerUpdateError } = await userAClient
+      .from('water_entries')
+      .update({ amount_ml: 500 })
+      .eq('id', entryId)
+      .select('id, amount_ml, local_date');
+    expect(ownerUpdateError).toBeNull();
+    expect(ownerUpdate).toEqual([]);
+
+    const { data: unchanged, error: readError } = await userAClient
+      .from('water_entries')
+      .select('id, amount_ml, local_date')
+      .eq('id', entryId)
+      .single();
+    expect(readError).toBeNull();
+    expect(unchanged).toEqual({
+      id: entryId,
+      amount_ml: 250,
+      local_date: '2026-11-20',
+    });
+  });
+
+  it('rejects local_date values that are not calendar dates', async () => {
+    for (const invalidDate of ['not-a-date', '2026-13-40', '']) {
+      const { error } = await userAClient.from('water_entries').insert({
+        id: crypto.randomUUID(),
+        amount_ml: 250,
+        local_date: invalidDate,
+      });
+      expect(error).not.toBeNull();
+    }
+  });
+
   it('rejects water amounts outside 1..5000 ml', async () => {
     for (const invalidAmount of [0, -100, 5001]) {
       const { error } = await userAClient.from('water_entries').insert({
