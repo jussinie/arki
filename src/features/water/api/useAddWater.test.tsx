@@ -269,6 +269,47 @@ describe('water Supabase API', () => {
     ).rejects.toBe(insertError);
   });
 
+  it('treats a null list payload as no water entries', async () => {
+    const emptyClient = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async () => ({ data: null, error: null }),
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      listWaterEntries(today, emptyClient as never)
+    ).resolves.toEqual([]);
+  });
+
+  it('propagates select errors after an ignored duplicate upsert', async () => {
+    const selectError = new Error('row not visible');
+    const failingClient = {
+      from: () => ({
+        upsert: () => ({
+          select: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+          }),
+        }),
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: selectError }),
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      addWaterEntry(
+        { id: 'op-retry', amountMl: 250, localDate: today },
+        failingClient as never
+      )
+    ).rejects.toBe(selectError);
+  });
+
   it('keeps the first row when the same operation id is inserted again', async () => {
     await fc.assert(
       fc.asyncProperty(
