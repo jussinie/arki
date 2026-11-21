@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
+import { WaterGoalMeter } from './WaterGoalMeter';
 import { WaterTracker } from './WaterTracker';
 
 type EntryRow = {
@@ -359,5 +360,49 @@ describe('WaterTracker daily goal', () => {
       screen.getByRole('progressbar', { name: 'Daily water goal' })
     ).toHaveAttribute('aria-valuemax', '2000');
     expect(db.goals).toEqual([]);
+  });
+
+  it('resets draft and validation error when goalMl changes and returns to a previous value', () => {
+    const onSave = vi.fn();
+    const { rerender } = render(
+      <WaterGoalMeter
+        consumedMl={0}
+        goalMl={2000}
+        saveError={false}
+        saving={false}
+        onSave={onSave}
+      />
+    );
+
+    const input = screen.getByLabelText('Daily water goal (L)');
+    fireEvent.change(input, { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a goal between 0.1 and 10 L'
+    );
+
+    rerender(
+      <WaterGoalMeter
+        consumedMl={0}
+        goalMl={3000}
+        saveError={false}
+        saving={false}
+        onSave={onSave}
+      />
+    );
+    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('3');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    rerender(
+      <WaterGoalMeter
+        consumedMl={0}
+        goalMl={2000}
+        saveError={false}
+        saving={false}
+        onSave={onSave}
+      />
+    );
+    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('2');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
