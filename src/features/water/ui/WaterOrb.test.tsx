@@ -1,11 +1,27 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import * as fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { MAX_WATER_GOAL_ML, MIN_WATER_GOAL_ML } from '../model';
 import { WaterGoalMeter } from './WaterGoalMeter';
 import { WaterOrb } from './WaterOrb';
+
+const orbCss = readFileSync(
+  join(process.cwd(), 'src/features/water/ui/WaterOrb.css'),
+  'utf8'
+);
+
+beforeEach(() => {
+  // Vitest does not inject imported stylesheets into jsdom, and it resets
+  // the document between tests. Geometry lives in CSS, so install that file.
+  document.head.querySelector('[data-water-orb]')?.remove();
+  const style = document.createElement('style');
+  style.dataset.waterOrb = 'true';
+  style.textContent = orbCss;
+  document.head.appendChild(style);
+});
 
 function fillOf(orb: HTMLElement): HTMLElement {
   const fill = orb.querySelector('.water__bar-fill');
@@ -140,8 +156,10 @@ describe('WaterOrb', () => {
 
     const orb = screen.getByRole('progressbar', { name: 'Daily water goal' });
     const orbStyle = getComputedStyle(orb);
-    expect(orbStyle.width).toBe('12rem');
-    expect(orbStyle.height).toBe('12rem');
+    expect(orbCss).toMatch(/width:\s*12rem/);
+    expect(orbCss).toMatch(/height:\s*12rem/);
+    expect(orbStyle.width).toBe('192px');
+    expect(orbStyle.height).toBe('192px');
     expect(orbStyle.borderRadius).toBe('50%');
     expect(orbStyle.overflow).toBe('hidden');
 
@@ -155,15 +173,19 @@ describe('WaterOrb', () => {
     expect(wave).toBeInstanceOf(SVGElement);
     expect(getComputedStyle(wave as Element).width).toBe('200%');
 
-    const css = readFileSync(new URL('./WaterOrb.css', import.meta.url), 'utf8');
-    expect(css).toMatch(/--color-surface/);
-    expect(css).toMatch(/--color-water-top/);
-    expect(css).toMatch(/--color-water-deep/);
-    expect(css).toMatch(/height\s+600ms\s+ease-out/);
-    expect(css).toMatch(/water-orb-wave\s+6s/);
-    const reduceAt = css.indexOf('prefers-reduced-motion: reduce');
+    expect(orbCss).toMatch(/solid var\(--color-surface\)/);
+    expect(orbCss).toMatch(
+      /linear-gradient\(\s*to top,\s*var\(--color-water-deep\),\s*var\(--color-water-top\)/
+    );
+    expect(orbCss).toMatch(/translateX\(-50%\)/);
+    expect(orbCss).toMatch(
+      /color-mix\(in srgb, var\(--color-surface\) 90%, transparent\)/
+    );
+    expect(orbCss).toMatch(/height\s+600ms\s+ease-out/);
+    expect(orbCss).toMatch(/water-orb-wave\s+6s/);
+    const reduceAt = orbCss.indexOf('prefers-reduced-motion: reduce');
     expect(reduceAt).toBeGreaterThan(-1);
-    const reduceBlock = css.slice(reduceAt);
+    const reduceBlock = orbCss.slice(reduceAt);
     expect(reduceBlock).toMatch(/animation:\s*none/);
     expect(reduceBlock).toMatch(/transition:\s*none/);
   });
