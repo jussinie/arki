@@ -286,14 +286,13 @@ Create `.dependency-cruiser.cjs` with these exact 4 `forbidden` rules (matching 
 
 ## Required GitHub Secrets for Staging Deployment
 
-| Secret / Variable               | Purpose                                                             |
-| ------------------------------- | ------------------------------------------------------------------- |
-| `VITE_SUPABASE_URL`             | Staging Supabase project URL                                        |
-| `VITE_SUPABASE_ANON_KEY`        | Staging Supabase public anon key                                    |
-| `SUPABASE_DB_URL`               | Staging Supabase Session Pooler connection string (IPv4 compatible) |
-| `CLOUDFLARE_API_TOKEN`          | Cloudflare API token with `Cloudflare Pages:Edit` permission        |
-| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                               |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Target Cloudflare Pages project name (e.g. `arki-staging`)          |
+| Secret / Variable               | Purpose                                                      |
+| ------------------------------- | ------------------------------------------------------------ |
+| `VITE_SUPABASE_URL`             | Staging Supabase project URL                                 |
+| `VITE_SUPABASE_ANON_KEY`        | Staging Supabase public anon key                             |
+| `CLOUDFLARE_API_TOKEN`          | Cloudflare API token with `Cloudflare Pages:Edit` permission |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account ID                                        |
+| `CLOUDFLARE_PAGES_PROJECT_NAME` | Target Cloudflare Pages project name (e.g. `arki-staging`)   |
 
 ---
 
