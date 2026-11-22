@@ -182,4 +182,14 @@ describe('session API', () => {
 
     await expect(signOut()).rejects.toBe(sessionError);
   });
+
+  it('throws a generic error when local sign-out fails with a non-Error and the session remains', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    auth.signOut.mockResolvedValue({ error: 'revocation failed' });
+
+    await expect(signOut()).rejects.toThrow('Could not sign out');
+  });
 });

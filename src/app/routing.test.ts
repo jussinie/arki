@@ -44,6 +44,8 @@ describe('sanitizeReturnPath', () => {
       '/sign-in/callback',
       '/days/2026-11-19\nSet-Cookie: a=b',
       '/days/2026-11-19\t',
+      '/days/2026-11-19\u0000',
+      '/days/2026-11-19\u007f',
     ];
 
     for (const target of unsafeTargets) {
@@ -100,6 +102,9 @@ describe('buildSignInUrl', () => {
     expect(buildSignInUrl('/days/2026-11-19?tab=water')).toBe(
       '/sign-in?redirect=%2Fdays%2F2026-11-19%3Ftab%3Dwater'
     );
+    expect(buildSignInUrl('/days/2026-11-19#water')).toBe(
+      '/sign-in?redirect=%2Fdays%2F2026-11-19%23water'
+    );
   });
 });
 
@@ -136,6 +141,24 @@ describe('getGuardRedirect', () => {
         false
       )
     ).toBe('/sign-in?redirect=%2Fdays%2F2026-11-19%3Ftab%3Dwater');
+    expect(
+      getGuardRedirect(
+        { pathname: '/days/2026-11-19', search: '', hash: '#water' },
+        false
+      )
+    ).toBe('/sign-in?redirect=%2Fdays%2F2026-11-19%23water');
+  });
+
+  it('sends signed-out users on nested /sign-in paths to /sign-in without a redirect loop', () => {
+    expect(
+      getGuardRedirect({ pathname: '/sign-in/', search: '', hash: '' }, false)
+    ).toBe('/sign-in');
+    expect(
+      getGuardRedirect(
+        { pathname: '/sign-in/callback', search: '?code=abc', hash: '' },
+        false
+      )
+    ).toBe('/sign-in');
   });
 
   it('keeps signed-out users on /sign-in without redirecting', () => {

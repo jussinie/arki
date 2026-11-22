@@ -696,4 +696,29 @@ describe('water_goals table and RLS (ARK-33)', () => {
     expect(userAStillError).toBeNull();
     expect(userAStill).toEqual([{ goal_ml: 2200 }]);
   });
+
+  it('rejects reassignment of User A goal to User B', async () => {
+    const { error: insertError } = await goals(userAClient).insert({
+      goal_ml: 2200,
+    });
+    expect(insertError).toBeNull();
+
+    const { data: reassigned, error: reassignError } = await goals(userAClient)
+      .update({ user_id: userBId })
+      .eq('user_id', userAId)
+      .select('user_id, goal_ml');
+    expect(reassignError !== null || reassigned?.length === 0).toBe(true);
+
+    const { data: ownerRow, error: ownerError } = await goals(userAClient)
+      .select('user_id, goal_ml')
+      .single();
+    expect(ownerError).toBeNull();
+    expect(ownerRow).toEqual({ user_id: userAId, goal_ml: 2200 });
+
+    const { data: userBRead, error: userBReadError } = await goals(userBClient)
+      .select('*')
+      .eq('user_id', userAId);
+    expect(userBReadError).toBeNull();
+    expect(userBRead).toEqual([]);
+  });
 });

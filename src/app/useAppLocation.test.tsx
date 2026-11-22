@@ -1,0 +1,58 @@
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useAppLocation } from './useAppLocation';
+
+describe('useAppLocation', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('reads the current path, search, and hash', () => {
+    window.history.replaceState(null, '', '/days/2026-11-19?tab=water#log');
+    const { result } = renderHook(() => useAppLocation());
+
+    expect(result.current.pathname).toBe('/days/2026-11-19');
+    expect(result.current.search).toBe('?tab=water');
+    expect(result.current.hash).toBe('#log');
+  });
+
+  it('replace updates history and the returned location', () => {
+    window.history.replaceState(null, '', '/');
+    const { result } = renderHook(() => useAppLocation());
+
+    act(() => {
+      result.current.replace('/sign-in?redirect=%2Flibrary');
+    });
+
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('?redirect=%2Flibrary');
+    expect(result.current.pathname).toBe('/sign-in');
+    expect(result.current.search).toBe('?redirect=%2Flibrary');
+  });
+
+  it('does not call replaceState when the URL is already the target', () => {
+    window.history.replaceState(null, '', '/sign-in');
+    const { result } = renderHook(() => useAppLocation());
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    act(() => {
+      result.current.replace('/sign-in');
+    });
+
+    expect(replaceState).not.toHaveBeenCalled();
+    replaceState.mockRestore();
+  });
+
+  it('updates after a popstate event', () => {
+    window.history.replaceState(null, '', '/');
+    const { result } = renderHook(() => useAppLocation());
+
+    act(() => {
+      window.history.pushState(null, '', '/library?q=oats');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(result.current.pathname).toBe('/library');
+    expect(result.current.search).toBe('?q=oats');
+  });
+});

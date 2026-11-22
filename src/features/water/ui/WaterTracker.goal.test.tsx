@@ -19,6 +19,7 @@ const db = vi.hoisted(() => {
   const entries: EntryRow[] = [];
   const goals: GoalRow[] = [];
   let nextSeq = 0;
+  let goalReadError: Error | null = null;
   let goalWriteError: Error | null = null;
 
   const from = vi.fn((table: string) => {
@@ -26,6 +27,9 @@ const db = vi.hoisted(() => {
       return {
         select: () => ({
           maybeSingle: async () => {
+            if (goalReadError) {
+              return { data: null, error: goalReadError };
+            }
             const row = goals[0];
             return {
               data: row ? { goal_ml: row.goal_ml } : null,
@@ -128,6 +132,9 @@ const db = vi.hoisted(() => {
   return {
     from,
     goals,
+    setGoalReadError(error: Error | null) {
+      goalReadError = error;
+    },
     setGoalWriteError(error: Error | null) {
       goalWriteError = error;
     },
@@ -135,6 +142,7 @@ const db = vi.hoisted(() => {
       entries.length = 0;
       goals.length = 0;
       nextSeq = 0;
+      goalReadError = null;
       goalWriteError = null;
       from.mockClear();
     },
@@ -340,6 +348,30 @@ describe('WaterTracker daily goal', () => {
     }
 
     expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2500 }]);
+  });
+
+  it('shows a goal error and still lets the user add water when the goal cannot be loaded', async () => {
+    db.setGoalReadError(new Error('permission denied'));
+    renderTracker();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to load the water goal. Please reload.'
+    );
+    expect(
+      await screen.findByText('0 ml', { exact: true })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^1 dl$/ })).toBeEnabled();
+    expect(
+      screen.queryByLabelText('Daily water goal (L)')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
+    expect(
+      await screen.findByText('200 ml', { exact: true })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Unable to load the water goal. Please reload.'
+    );
   });
 
   it('shows an error when saving the goal fails and leaves the previous goal', async () => {
