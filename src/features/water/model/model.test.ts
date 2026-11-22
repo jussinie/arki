@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
 import {
   QUICK_ADD_WATER_DL,
+  assertWaterGoalMl,
   createClientOpId,
   formatWaterGoalLiters,
   isWaterGoalReached,
@@ -101,8 +102,20 @@ describe('water goal', () => {
       'NaN',
       'Infinity',
       '1e1',
+      '2.0001',
+      '0.1000',
     ]) {
       expect(() => parseWaterGoalInput(invalid)).toThrow(
+        'Enter a goal between 0.1 and 10 L'
+      );
+    }
+  });
+
+  it('accepts whole millilitre goals at the 100..10000 bounds and rejects non-integers', () => {
+    expect(assertWaterGoalMl(100)).toBe(100);
+    expect(assertWaterGoalMl(10000)).toBe(10000);
+    for (const invalid of [99, 10001, 2000.5, NaN, Infinity, -Infinity, 0]) {
+      expect(() => assertWaterGoalMl(invalid)).toThrow(
         'Enter a goal between 0.1 and 10 L'
       );
     }
@@ -139,8 +152,10 @@ describe('water goal', () => {
     expect(isWaterGoalReached(2500, 2000)).toBe(true);
 
     expect(waterGoalFillRatio(1999, 2000)).toBeLessThan(1);
-    expect(waterGoalFillPercent(1999, 2000)).toBeLessThan(100);
+    expect(waterGoalFillPercent(1999, 2000)).toBe(99.9);
     expect(isWaterGoalReached(1999, 2000)).toBe(false);
+    expect(waterGoalFillPercent(9995, 10000)).toBe(99.9);
+    expect(isWaterGoalReached(9995, 10000)).toBe(false);
   });
 
   it('does not fill or mark the goal reached when the goal is not positive', () => {
@@ -149,6 +164,14 @@ describe('water goal', () => {
     expect(isWaterGoalReached(500, 0)).toBe(false);
     expect(waterGoalFillRatio(500, -100)).toBe(0);
     expect(isWaterGoalReached(-10, 2000)).toBe(false);
+    for (const invalid of [NaN, Infinity, -Infinity]) {
+      expect(waterGoalFillRatio(invalid, 2000)).toBe(0);
+      expect(waterGoalFillPercent(invalid, 2000)).toBe(0);
+      expect(isWaterGoalReached(invalid, 2000)).toBe(false);
+      expect(waterGoalFillRatio(500, invalid)).toBe(0);
+      expect(waterGoalFillPercent(500, invalid)).toBe(0);
+      expect(isWaterGoalReached(500, invalid)).toBe(false);
+    }
   });
 
   it('keeps the fill between empty and full for any consumed amount', () => {

@@ -12,13 +12,16 @@ import {
 type GoalRow = { user_id: string; goal_ml: number };
 
 const auth = vi.hoisted(() => ({
-  userId: 'user-1',
+  userId: 'user-1' as string | null,
+  error: null as Error | null,
 }));
 
 const db = vi.hoisted(() => {
   const goals: GoalRow[] = [];
   let readError: Error | null = null;
   let writeError: Error | null = null;
+  let writeGate: Promise<void> = Promise.resolve();
+  let releaseWrites: (() => void) | null = null;
   const upserts: Array<{ user_id: string; goal_ml: number }> = [];
 
   const from = vi.fn((table: string) => {
@@ -60,6 +63,7 @@ const db = vi.hoisted(() => {
         return {
           select: () => ({
             single: async () => {
+              await writeGate;
               if (writeError) return { data: null, error: writeError };
               const existing = goals.find(
                 (row) => row.user_id === payload.user_id
@@ -87,11 +91,23 @@ const db = vi.hoisted(() => {
     setWriteError(error: Error | null) {
       writeError = error;
     },
+    holdWrites() {
+      writeGate = new Promise<void>((resolve) => {
+        releaseWrites = resolve;
+      });
+      return () => {
+        writeGate = Promise.resolve();
+        releaseWrites?.();
+        releaseWrites = null;
+      };
+    },
     reset() {
       goals.length = 0;
       upserts.length = 0;
       readError = null;
       writeError = null;
+      writeGate = Promise.resolve();
+      releaseWrites = null;
       from.mockClear();
     },
   };
@@ -101,14 +117,22 @@ vi.mock('../../../shared/supabase', () => ({
   supabase: {
     from: db.from,
     auth: {
-      getSession: async () => ({
-        data: {
-          session: {
-            user: { id: auth.userId, email: `${auth.userId}@example.com` },
+      getSession: async () => {
+        if (auth.error) {
+          return { data: { session: null }, error: auth.error };
+        }
+        if (!auth.userId) {
+          return { data: { session: null }, error: null };
+        }
+        return {
+          data: {
+            session: {
+              user: { id: auth.userId, email: `${auth.userId}@example.com` },
+            },
           },
-        },
-        error: null,
-      }),
+          error: null,
+        };
+      },
     },
   },
 }));
@@ -121,15 +145,18 @@ function createWrapper() {
     },
   });
 
-  return function Wrapper({ children }: { children: ReactNode }) {
+  function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
-  };
+  }
+
+  return { queryClient, wrapper: Wrapper };
 }
 
 beforeEach(() => {
   auth.userId = 'user-1';
+  auth.error = null;
   db.reset();
 });
 
@@ -191,7 +218,7 @@ describe('useWaterGoal', () => {
         goal: useWaterGoal(),
         save: useSetWaterGoal(),
       }),
-      { wrapper: createWrapper() }
+      { wrapper: createWrapper().wrapper }
     );
 
     await waitFor(() => expect(result.current.goal.isSuccess).toBe(true));
@@ -234,5 +261,107 @@ describe('useWaterGoal', () => {
     await waitFor(() => expect(result.current.data).toBe(3000));
     expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500);
     expect(queryClient.getQueryData(['water-goal', 'user-2'])).toBe(3000);
+  });
+
+  it('does not fetch a goal when there is no signed-in user', async () => {
+    auth.userId = null;
+    const { result } = renderHook(() => useWaterGoal(), {
+      wrapper: createWrapper().wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(result.current.data).toBeUndefined();
+    expect(db.from).not.toHaveBeenCalled();
+  });
+});
+
+describe('useSetWaterGoal', () => {
+  it('rejects a save when the user is signed out before writing', async () => {
+    auth.userId = null;
+    const { result } = renderHook(() => useSetWaterGoal(), {
+      wrapper: createWrapper().wrapper,
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(2500)).rejects.toThrow(
+        'Not signed in'
+      );
+    });
+    expect(db.from).not.toHaveBeenCalled();
+    expect(db.upserts).toEqual([]);
+  });
+
+  it('rejects a save when reading the session fails', async () => {
+    const sessionError = new Error('session store unreadable');
+    auth.error = sessionError;
+    const { result } = renderHook(() => useSetWaterGoal(), {
+      wrapper: createWrapper().wrapper,
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(2500)).rejects.toBe(sessionError);
+    });
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it('shows the new goal immediately, then restores the previous goal when the write fails', async () => {
+    const { queryClient, wrapper } = createWrapper();
+    const { result } = renderHook(
+      () => ({
+        goal: useWaterGoal(),
+        save: useSetWaterGoal(),
+      }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.goal.data).toBe(2000));
+    db.setWriteError(new Error('permission denied'));
+    const releaseWrites = db.holdWrites();
+
+    let saveResult: Promise<unknown> | undefined;
+    act(() => {
+      saveResult = result.current.save
+        .mutateAsync(2500)
+        .catch((error) => error);
+    });
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500)
+    );
+
+    releaseWrites();
+    await act(async () => {
+      await saveResult;
+    });
+
+    await waitFor(() => expect(result.current.save.isError).toBe(true));
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2000);
+    expect(db.goals).toEqual([]);
+  });
+
+  it('drops the optimistic goal when the write fails and no previous goal was cached', async () => {
+    const { queryClient, wrapper } = createWrapper();
+    const { result } = renderHook(() => useSetWaterGoal(), { wrapper });
+
+    db.setWriteError(new Error('permission denied'));
+    const releaseWrites = db.holdWrites();
+
+    let saveResult: Promise<unknown> | undefined;
+    act(() => {
+      saveResult = result.current.mutateAsync(2500).catch((error) => error);
+    });
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500)
+    );
+
+    releaseWrites();
+    await act(async () => {
+      await saveResult;
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBeUndefined();
+    expect(db.goals).toEqual([]);
   });
 });
