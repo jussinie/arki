@@ -18,6 +18,8 @@
   --radius-sm: 0.5rem;
   --radius-lg: 1rem;
   --radius-pill: 999px;
+
+  --font-sans: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
