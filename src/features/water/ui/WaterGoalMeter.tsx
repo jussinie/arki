@@ -4,8 +4,8 @@ import {
   formatWaterGoalLiters,
   isWaterGoalReached,
   parseWaterGoalInput,
-  waterGoalFillPercent,
 } from '../model';
+import { WaterOrb } from './WaterOrb';
 
 const SAVE_GOAL_ERROR = 'Could not save the water goal. Try again.';
 
@@ -89,27 +89,11 @@ export function WaterGoalMeter({
 }: WaterGoalMeterProps) {
   const savedLabel = formatWaterGoalLiters(goalMl);
   const reached = isWaterGoalReached(consumedMl, goalMl);
-  const shownConsumedMl = Number.isFinite(consumedMl)
-    ? Math.max(consumedMl, 0)
-    : 0;
 
   return (
     <div className="water__goal">
       <div className="water__goal-meter">
-        <div
-          className="water__bar"
-          role="progressbar"
-          aria-label="Daily water goal"
-          aria-valuemin={0}
-          aria-valuemax={goalMl}
-          aria-valuenow={Math.min(shownConsumedMl, goalMl)}
-          aria-valuetext={`${shownConsumedMl} ml of ${savedLabel} L`}
-        >
-          <div
-            className="water__bar-fill"
-            style={{ width: `${waterGoalFillPercent(consumedMl, goalMl)}%` }}
-          />
-        </div>
+        <WaterOrb consumedMl={consumedMl} goalMl={goalMl} />
         <div className="water__goal-status" aria-live="polite">
           {reached ? (
             <span
