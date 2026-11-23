@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { App } from './App';
@@ -163,6 +163,40 @@ describe('App', () => {
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Sign in' })
     ).not.toBeInTheDocument();
+  });
+
+  it('disables Sign out while the request is in flight', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    let releaseSignOut: (() => void) | undefined;
+    auth.signOut.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseSignOut = () => resolve({ error: null });
+        })
+    );
+    render(<App />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Sign out' })
+    ).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sign out' })).toBeDisabled();
+    });
+    expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
+
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    releaseSignOut?.();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
   });
 
   it('returns to the sign-in page after sign-out', async () => {
