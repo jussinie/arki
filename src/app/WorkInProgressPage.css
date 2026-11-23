@@ -1,0 +1,13 @@
+.work-in-progress {
+  flex: 1;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+.work-in-progress h2 {
+  margin: 0;
+}
+
+.work-in-progress p {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-muted);
+}

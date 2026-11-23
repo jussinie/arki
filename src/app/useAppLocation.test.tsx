@@ -55,4 +55,34 @@ describe('useAppLocation', () => {
     expect(result.current.pathname).toBe('/library');
     expect(result.current.search).toBe('?q=oats');
   });
+
+  it('push adds a new history entry and updates the returned location', () => {
+    window.history.replaceState(null, '', '/food');
+    const { result } = renderHook(() => useAppLocation());
+    const pushState = vi.spyOn(window.history, 'pushState');
+
+    act(() => {
+      result.current.push('/settings?tab=profile');
+    });
+
+    expect(pushState).toHaveBeenCalledWith(null, '', '/settings?tab=profile');
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('?tab=profile');
+    expect(result.current.pathname).toBe('/settings');
+    expect(result.current.search).toBe('?tab=profile');
+    pushState.mockRestore();
+  });
+
+  it('push does not add a duplicate history entry for the current URL', () => {
+    window.history.replaceState(null, '', '/food');
+    const { result } = renderHook(() => useAppLocation());
+    const pushState = vi.spyOn(window.history, 'pushState');
+
+    act(() => {
+      result.current.push('/food');
+    });
+
+    expect(pushState).not.toHaveBeenCalled();
+    pushState.mockRestore();
+  });
 });

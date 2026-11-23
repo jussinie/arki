@@ -483,3 +483,173 @@ describe('selected-day presentation', () => {
     expect(window.location.hash).toBe('');
   });
 });
+
+describe('app navigation', () => {
+  beforeEach(() => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+  });
+
+  it('shows the Water, Food, and Settings tabs with Water current on the Today view', async () => {
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { name: 'Today' });
+    expect(
+      screen.getByRole('navigation', { name: 'Primary' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Water' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('link', { name: 'Food' })).not.toHaveAttribute(
+      'aria-current'
+    );
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute(
+      'aria-current'
+    );
+  });
+
+  it('switches to the Food stub page and back to the Water view', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { name: 'Today' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Food' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Today' })
+    ).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/food');
+    expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Water' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('renders the Settings stub page from the /settings path', async () => {
+    window.history.replaceState(null, '', '/settings');
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
+  it('follows popstate navigation between tabs', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { name: 'Today' });
+
+    window.history.pushState(null, '', '/food');
+    fireEvent(window, new PopStateEvent('popstate'));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+
+    window.history.pushState(null, '', '/settings');
+    fireEvent(window, new PopStateEvent('popstate'));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+  });
+
+  it('keeps day deep links on the Water tab', async () => {
+    window.history.replaceState(null, '', '/days/2026-11-19?tab=water');
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'Today' });
+    expect(screen.getByRole('link', { name: 'Water' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Food' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the tab bar when signed out', async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('returns to the Food stub page after signing in from a /food deep link', async () => {
+    window.history.replaceState(null, '', '/food');
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    auth.signInWithPassword.mockResolvedValue({ data: { user }, error: null });
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+    expect(window.location.search).toBe('?redirect=%2Ffood');
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/food');
+  });
+
+  it('bounces signed-out /settings deep links to /sign-in and returns after sign-in', async () => {
+    window.history.replaceState(null, '', '/settings');
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    auth.signInWithPassword.mockResolvedValue({ data: { user }, error: null });
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+    expect(window.location.search).toBe('?redirect=%2Fsettings');
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+  });
+});

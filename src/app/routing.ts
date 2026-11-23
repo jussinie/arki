@@ -1,5 +1,7 @@
 export const TODAY_PATH = '/';
 export const SIGN_IN_PATH = '/sign-in';
+export const FOOD_PATH = '/food';
+export const SETTINGS_PATH = '/settings';
 export const REDIRECT_QUERY_PARAM = 'redirect';
 
 export type AppLocation = {
@@ -20,8 +22,12 @@ function hasControlChar(value: string): boolean {
   return false;
 }
 
+function matchesPathOrNested(pathname: string, basePath: string): boolean {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
 function isSignInPath(pathname: string): boolean {
-  return pathname === SIGN_IN_PATH || pathname.startsWith(`${SIGN_IN_PATH}/`);
+  return matchesPathOrNested(pathname, SIGN_IN_PATH);
 }
 
 /**
@@ -90,4 +96,21 @@ export function getGuardRedirect(
   }
 
   return null;
+}
+
+export type AppTab = 'water' | 'food' | 'settings';
+
+/**
+ * Maps a pathname to the bottom-navigation tab. Unknown paths — including
+ * `/days/:date` deep links — resolve to the water tab until route tables
+ * arrive with react-router (ARK-32).
+ */
+export function resolveAppTab(pathname: string): AppTab {
+  if (matchesPathOrNested(pathname, FOOD_PATH)) {
+    return 'food';
+  }
+  if (matchesPathOrNested(pathname, SETTINGS_PATH)) {
+    return 'settings';
+  }
+  return 'water';
 }

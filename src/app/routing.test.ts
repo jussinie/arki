@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import * as fc from 'fast-check';
 import {
+  FOOD_PATH,
+  SETTINGS_PATH,
   SIGN_IN_PATH,
   TODAY_PATH,
   buildSignInUrl,
   getGuardRedirect,
+  resolveAppTab,
   resolvePostSignInPath,
   sanitizeReturnPath,
 } from './routing';
@@ -209,5 +212,36 @@ describe('getGuardRedirect', () => {
         true
       )
     ).toBeNull();
+  });
+});
+
+describe('app tab paths', () => {
+  it('keeps the water tab at the Today root and adds Food and Settings paths', () => {
+    expect(TODAY_PATH).toBe('/');
+    expect(FOOD_PATH).toBe('/food');
+    expect(SETTINGS_PATH).toBe('/settings');
+  });
+});
+
+describe('resolveAppTab', () => {
+  it('maps the Today root and day deep links to the water tab', () => {
+    expect(resolveAppTab('/')).toBe('water');
+    expect(resolveAppTab('/days/2026-11-19')).toBe('water');
+    expect(resolveAppTab('/days/2026-11-19?tab=water')).toBe('water');
+  });
+
+  it('maps /food and nested food paths to the food tab', () => {
+    expect(resolveAppTab('/food')).toBe('food');
+    expect(resolveAppTab('/food/2026-11-19')).toBe('food');
+  });
+
+  it('maps /settings and nested settings paths to the settings tab', () => {
+    expect(resolveAppTab('/settings')).toBe('settings');
+    expect(resolveAppTab('/settings/profile')).toBe('settings');
+  });
+
+  it('falls back to the water tab for unknown paths', () => {
+    expect(resolveAppTab('/library')).toBe('water');
+    expect(resolveAppTab('/recipes/123')).toBe('water');
   });
 });

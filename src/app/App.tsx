@@ -4,7 +4,9 @@ import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
 import { WaterTracker } from '../features/water';
 import { formatDisplayDate, getTodayLocalDate } from '../shared/date';
 import { DateNavigator } from './DateNavigator';
-import { SIGN_IN_PATH, getGuardRedirect } from './routing';
+import { TabBar } from './TabBar';
+import { WorkInProgressPage } from './WorkInProgressPage';
+import { SIGN_IN_PATH, getGuardRedirect, resolveAppTab } from './routing';
 import { useAppLocation } from './useAppLocation';
 import './App.css';
 
@@ -45,7 +47,7 @@ function SessionView({
 }) {
   const session = useCurrentSession();
   const signOut = useSignOut();
-  const { pathname, search, hash, replace } = useAppLocation();
+  const { pathname, search, hash, push, replace } = useAppLocation();
   const isAuthenticated = Boolean(session.data);
   const { isSuccess: isSignOutSuccess, reset: resetSignOut } = signOut;
 
@@ -85,15 +87,17 @@ function SessionView({
     return <p role="alert">Unable to load your session. Please reload.</p>;
   if (!session.data) return <SignInPage />;
 
+  const tab = resolveAppTab(pathname);
+
   return (
-    <main className="today">
-      <header className="today__header">
-        <div className="today__identity">
+    <div className="app">
+      <header className="app__header">
+        <div className="app__identity">
           <h1>Arki</h1>
-          <p className="today__email">{session.data.email}</p>
+          <p className="app__email">{session.data.email}</p>
         </div>
         <button
-          className="today__sign-out"
+          className="app__sign-out"
           type="button"
           disabled={signOut.isPending}
           onClick={() => {
@@ -103,15 +107,28 @@ function SessionView({
           Sign out
         </button>
       </header>
-      <h2>{localDate === today ? 'Today' : formatDisplayDate(localDate)}</h2>
-      <DateNavigator value={localDate} today={today} onChange={onDateChange} />
       {signOut.isError ? (
-        <p className="today__error" role="alert">
+        <p className="app__sign-out-error" role="alert">
           Could not sign out. Try again.
         </p>
       ) : null}
-      <WaterTracker localDate={localDate} />
-    </main>
+      {tab === 'food' || tab === 'settings' ? (
+        <WorkInProgressPage title={tab === 'food' ? 'Food' : 'Settings'} />
+      ) : (
+        <main className="today">
+          <h2>
+            {localDate === today ? 'Today' : formatDisplayDate(localDate)}
+          </h2>
+          <DateNavigator
+            value={localDate}
+            today={today}
+            onChange={onDateChange}
+          />
+          <WaterTracker localDate={localDate} />
+        </main>
+      )}
+      <TabBar activeTab={tab} onNavigate={push} />
+    </div>
   );
 }
 
