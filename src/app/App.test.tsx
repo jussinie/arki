@@ -591,4 +591,31 @@ describe('app navigation', () => {
     expect(screen.getByText('Work in progress')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/food');
   });
+
+  it('bounces signed-out /settings deep links to /sign-in and returns after sign-in', async () => {
+    window.history.replaceState(null, '', '/settings');
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    auth.signInWithPassword.mockResolvedValue({ data: { user }, error: null });
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+    expect(window.location.search).toBe('?redirect=%2Fsettings');
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+  });
 });
