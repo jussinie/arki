@@ -14,6 +14,7 @@ function readWindowLocation(): AppLocation {
  * Replaced by `react-router` once multi-screen navigation arrives (see ARK-32).
  */
 export function useAppLocation(): AppLocation & {
+  push: (to: string) => void;
   replace: (to: string) => void;
 } {
   const [location, setLocation] = useState<AppLocation>(readWindowLocation);
@@ -28,6 +29,9 @@ export function useAppLocation(): AppLocation & {
     };
   }, []);
 
+  // RED skeleton: real history navigation lands with the GREEN step.
+  const push = useCallback((_to: string) => undefined, []);
+
   const replace = useCallback((to: string) => {
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (current !== to) {
@@ -36,5 +40,5 @@ export function useAppLocation(): AppLocation & {
     setLocation(readWindowLocation());
   }, []);
 
-  return { ...location, replace };
+  return { ...location, push, replace };
 }

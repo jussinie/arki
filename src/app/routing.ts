@@ -1,5 +1,7 @@
 export const TODAY_PATH = '/';
 export const SIGN_IN_PATH = '/sign-in';
+export const FOOD_PATH = '/food';
+export const SETTINGS_PATH = '/settings';
 export const REDIRECT_QUERY_PARAM = 'redirect';
 
 export type AppLocation = {
@@ -90,4 +92,12 @@ export function getGuardRedirect(
   }
 
   return null;
+}
+
+export type AppTab = 'water' | 'food' | 'settings';
+
+// RED skeleton: always reports the water tab so the acceptance tests fail on
+// assertions. The real mapping lands with the GREEN step.
+export function resolveAppTab(_pathname: string): AppTab {
+  return 'water';
 }
