@@ -203,7 +203,9 @@ describe('getGuardRedirect', () => {
   });
 
   it('keeps signed-in users on app routes without redirecting', () => {
-    expect(getGuardRedirect({ pathname: '/', search: '', hash: '' }, true)).toBeNull();
+    expect(
+      getGuardRedirect({ pathname: '/', search: '', hash: '' }, true)
+    ).toBeNull();
     expect(
       getGuardRedirect(
         { pathname: '/days/2026-11-19', search: '', hash: '' },

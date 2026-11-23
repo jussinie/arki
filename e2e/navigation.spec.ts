@@ -85,9 +85,9 @@ test.describe('Bottom tab navigation (ARK-46)', () => {
     await page.goto('/food');
 
     await expect(page).toHaveURL('/sign-in?redirect=%2Ffood');
-    await expect(
-      page.getByRole('navigation', { name: 'Primary' })
-    ).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(
+      0
+    );
 
     await signIn(page);
 

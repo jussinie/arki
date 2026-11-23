@@ -22,8 +22,12 @@ function hasControlChar(value: string): boolean {
   return false;
 }
 
+function matchesPathOrNested(pathname: string, basePath: string): boolean {
+  return pathname === basePath || pathname.startsWith(`${basePath}/`);
+}
+
 function isSignInPath(pathname: string): boolean {
-  return pathname === SIGN_IN_PATH || pathname.startsWith(`${SIGN_IN_PATH}/`);
+  return matchesPathOrNested(pathname, SIGN_IN_PATH);
 }
 
 /**
@@ -96,8 +100,17 @@ export function getGuardRedirect(
 
 export type AppTab = 'water' | 'food' | 'settings';
 
-// RED skeleton: always reports the water tab so the acceptance tests fail on
-// assertions. The real mapping lands with the GREEN step.
-export function resolveAppTab(_pathname: string): AppTab {
+/**
+ * Maps a pathname to the bottom-navigation tab. Unknown paths — including
+ * `/days/:date` deep links — resolve to the water tab until route tables
+ * arrive with react-router (ARK-32).
+ */
+export function resolveAppTab(pathname: string): AppTab {
+  if (matchesPathOrNested(pathname, FOOD_PATH)) {
+    return 'food';
+  }
+  if (matchesPathOrNested(pathname, SETTINGS_PATH)) {
+    return 'settings';
+  }
   return 'water';
 }

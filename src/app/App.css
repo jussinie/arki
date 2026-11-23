@@ -1,35 +1,37 @@
-.today {
+.app {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 64rem;
+  max-width: 24rem;
+  min-height: 100dvh;
   margin: 0 auto;
-  padding: 1.5rem;
 }
 
-.today__header {
+.app__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.5rem 1.5rem;
+  padding: 1.5rem 1.25rem 1rem;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 1rem;
 }
 
-.today__header h1,
-.today__email {
+.app__header h1,
+.app__email {
   margin: 0;
 }
 
-.today__identity {
+.app__identity {
   min-width: 0;
 }
 
-.today__email {
+.app__email {
   overflow-wrap: anywhere;
   color: var(--color-text-muted);
 }
 
-.today__sign-out {
+.app__sign-out {
   flex: 0 0 auto;
   min-height: 2.75rem;
   padding: 0.75rem 1rem;
@@ -43,16 +45,22 @@
   touch-action: manipulation;
 }
 
-.today__sign-out:disabled {
+.app__sign-out:disabled {
   opacity: 0.7;
 }
 
-.today__sign-out:focus-visible {
+.app__sign-out:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-.today__error {
-  margin: 1rem 0 0;
+.app__sign-out-error {
+  margin: 0;
+  padding: 0.75rem 1.25rem 0;
   color: var(--color-error);
+}
+
+.today {
+  flex: 1;
+  padding: 1.5rem 1.25rem 2.5rem;
 }

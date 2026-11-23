@@ -9,9 +9,13 @@ function readWindowLocation(): AppLocation {
   };
 }
 
+function toCurrentUrl(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
 /**
  * Lightweight Web History API location hook for `src/app/`.
- * Replaced by `react-router` once multi-screen navigation arrives (see ARK-32).
+ * Replaced by `react-router` once parameterized route tables arrive (see ARK-32).
  */
 export function useAppLocation(): AppLocation & {
   push: (to: string) => void;
@@ -29,12 +33,15 @@ export function useAppLocation(): AppLocation & {
     };
   }, []);
 
-  // RED skeleton: real history navigation lands with the GREEN step.
-  const push = useCallback((_to: string) => undefined, []);
+  const push = useCallback((to: string) => {
+    if (toCurrentUrl() !== to) {
+      window.history.pushState(null, '', to);
+    }
+    setLocation(readWindowLocation());
+  }, []);
 
   const replace = useCallback((to: string) => {
-    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    if (current !== to) {
+    if (toCurrentUrl() !== to) {
       window.history.replaceState(null, '', to);
     }
     setLocation(readWindowLocation());

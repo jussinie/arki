@@ -1,9 +1,4 @@
-import {
-  createEvent,
-  fireEvent,
-  render,
-  screen,
-} from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { TabBar } from './TabBar';
