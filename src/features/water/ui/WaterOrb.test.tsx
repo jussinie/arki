@@ -105,6 +105,29 @@ describe('WaterOrb', () => {
     }
   });
 
+  it('keeps 1999 ml of a 2 L goal at 99.9% so the glass is not full before the goal', () => {
+    render(<WaterOrb consumedMl={1999} goalMl={2000} />);
+
+    const orb = screen.getByRole('progressbar', { name: 'Daily water goal' });
+    expect(orb).toHaveAttribute('aria-valuenow', '1999');
+    expect(orb).toHaveAttribute('aria-valuemax', '2000');
+    expect(orb).toHaveAttribute('aria-valuetext', '1999 ml of 2 L');
+    expect(fillOf(orb)).toHaveStyle({ width: '99.9%', height: '99.9%' });
+    expect(screen.getByText('1.999 L')).toBeInTheDocument();
+    expect(screen.getByText('of 2 L · 99.9%')).toBeInTheDocument();
+    expect(orb.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('treats a missing or invalid goal as an empty glass', () => {
+    for (const goalMl of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const { unmount } = render(<WaterOrb consumedMl={500} goalMl={goalMl} />);
+      const orb = screen.getByRole('progressbar', { name: 'Daily water goal' });
+      expect(fillOf(orb)).toHaveStyle({ width: '0%', height: '0%' });
+      expect(orb.querySelector('svg')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it('keeps the rendered fill between 0 and 100% and aria-valuenow within the goal', () => {
     fc.assert(
       fc.property(
@@ -230,5 +253,25 @@ describe('WaterOrb', () => {
     ).toHaveStyle({ width: '100%', height: '100%' });
     expect(screen.getByText('2 L')).toBeInTheDocument();
     expect(screen.getByText('of 2 L · 100%')).toBeInTheDocument();
+  });
+
+  it('does not mark the goal reached when the glass is capped at 99.9%', () => {
+    render(
+      <WaterGoalMeter
+        consumedMl={1999}
+        goalMl={2000}
+        saveError={false}
+        saving={false}
+        onSave={() => undefined}
+      />
+    );
+
+    expect(
+      screen.queryByRole('img', { name: 'Goal reached' })
+    ).not.toBeInTheDocument();
+    expect(
+      fillOf(screen.getByRole('progressbar', { name: 'Daily water goal' }))
+    ).toHaveStyle({ width: '99.9%', height: '99.9%' });
+    expect(screen.getByText('of 2 L · 99.9%')).toBeInTheDocument();
   });
 });

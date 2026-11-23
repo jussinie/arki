@@ -339,6 +339,67 @@ describe('useSetWaterGoal', () => {
     expect(db.goals).toEqual([]);
   });
 
+  it('rejects a goal outside 100..10000 ml before writing', async () => {
+    const { result } = renderHook(() => useSetWaterGoal(), {
+      wrapper: createWrapper().wrapper,
+    });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(99)).rejects.toThrow(
+        'Enter a goal between 0.1 and 10 L'
+      );
+      await expect(result.current.mutateAsync(10001)).rejects.toThrow(
+        'Enter a goal between 0.1 and 10 L'
+      );
+    });
+    expect(db.from).not.toHaveBeenCalled();
+    expect(db.upserts).toEqual([]);
+  });
+
+  it('queues a second goal save until the first write finishes', async () => {
+    const { queryClient, wrapper } = createWrapper();
+    const { result } = renderHook(
+      () => ({
+        goal: useWaterGoal(),
+        save: useSetWaterGoal(),
+      }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.goal.data).toBe(2000));
+    const releaseWrites = db.holdWrites();
+
+    let first: Promise<unknown> | undefined;
+    act(() => {
+      first = result.current.save.mutateAsync(2500);
+    });
+    await waitFor(() =>
+      expect(db.upserts).toEqual([{ user_id: 'user-1', goal_ml: 2500 }])
+    );
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500);
+
+    let second: Promise<unknown> | undefined;
+    act(() => {
+      second = result.current.save.mutateAsync(1800);
+    });
+
+    expect(db.upserts).toEqual([{ user_id: 'user-1', goal_ml: 2500 }]);
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBe(2500);
+
+    releaseWrites();
+    await act(async () => {
+      await first;
+      await second;
+    });
+
+    await waitFor(() => expect(result.current.goal.data).toBe(1800));
+    expect(db.goals).toEqual([{ user_id: 'user-1', goal_ml: 1800 }]);
+    expect(db.upserts).toEqual([
+      { user_id: 'user-1', goal_ml: 2500 },
+      { user_id: 'user-1', goal_ml: 1800 },
+    ]);
+  });
+
   it('drops the optimistic goal when the write fails and no previous goal was cached', async () => {
     const { queryClient, wrapper } = createWrapper();
     const { result } = renderHook(() => useSetWaterGoal(), { wrapper });

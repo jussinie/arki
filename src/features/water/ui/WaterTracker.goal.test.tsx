@@ -394,6 +394,81 @@ describe('WaterTracker daily goal', () => {
     expect(db.goals).toEqual([]);
   });
 
+  it('saves a comma decimal as litres and rewrites the draft in dotted form', async () => {
+    renderTracker();
+
+    const input = await screen.findByLabelText('Daily water goal (L)');
+    fireEvent.change(input, { target: { value: '2,5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+
+    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
+      '2.5'
+    );
+    expect(
+      screen.getByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '2500');
+    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2500 }]);
+  });
+
+  it('rewrites a leading-zero whole-litre draft after a successful save', async () => {
+    renderTracker();
+
+    const input = await screen.findByLabelText('Daily water goal (L)');
+    fireEvent.change(input, { target: { value: '02' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+
+    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
+      '2'
+    );
+    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2000 }]);
+  });
+
+  it('disables Save goal while a save is in flight', () => {
+    render(
+      <WaterGoalMeter
+        consumedMl={0}
+        goalMl={2000}
+        saveError={false}
+        saving
+        onSave={() => undefined}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Save goal' })).toBeDisabled();
+  });
+
+  it('marks the goal field invalid and prefers the validation message over a save error', () => {
+    const onSave = vi.fn();
+    render(
+      <WaterGoalMeter
+        consumedMl={0}
+        goalMl={2000}
+        saveError
+        saving={false}
+        onSave={onSave}
+      />
+    );
+
+    const input = screen.getByLabelText('Daily water goal (L)');
+    expect(input).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not save the water goal. Try again.'
+    );
+    expect(input).toHaveAttribute('aria-describedby', 'water-goal-error');
+
+    fireEvent.change(input, { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a goal between 0.1 and 10 L'
+    );
+    expect(
+      screen.queryByText('Could not save the water goal. Try again.')
+    ).not.toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('resets draft and validation error when goalMl changes and returns to a previous value', () => {
     const onSave = vi.fn();
     const { rerender } = render(
