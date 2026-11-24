@@ -22,6 +22,11 @@ describe('sanitizeReturnPath', () => {
     expect(sanitizeReturnPath('/days/2026-11-19#water')).toBe(
       '/days/2026-11-19#water'
     );
+    expect(sanitizeReturnPath('/food')).toBe('/food');
+    expect(sanitizeReturnPath('/settings')).toBe('/settings');
+    expect(sanitizeReturnPath('/food/log?tab=recent#top')).toBe(
+      '/food/log?tab=recent#top'
+    );
   });
 
   it('rejects empty, external, protocol-relative, backslash, control-char, and sign-in loop targets', () => {
@@ -108,6 +113,8 @@ describe('buildSignInUrl', () => {
     expect(buildSignInUrl('/days/2026-11-19#water')).toBe(
       '/sign-in?redirect=%2Fdays%2F2026-11-19%23water'
     );
+    expect(buildSignInUrl('/food')).toBe('/sign-in?redirect=%2Ffood');
+    expect(buildSignInUrl('/settings')).toBe('/sign-in?redirect=%2Fsettings');
   });
 });
 
@@ -116,6 +123,8 @@ describe('resolvePostSignInPath', () => {
     expect(
       resolvePostSignInPath('?redirect=%2Fdays%2F2026-11-19%3Ftab%3Dwater')
     ).toBe('/days/2026-11-19?tab=water');
+    expect(resolvePostSignInPath('?redirect=%2Ffood')).toBe('/food');
+    expect(resolvePostSignInPath('?redirect=%2Fsettings')).toBe('/settings');
   });
 
   it('falls back to / when redirect is absent or unsafe', () => {
@@ -212,6 +221,27 @@ describe('getGuardRedirect', () => {
         true
       )
     ).toBeNull();
+    expect(
+      getGuardRedirect({ pathname: '/food', search: '', hash: '' }, true)
+    ).toBeNull();
+    expect(
+      getGuardRedirect({ pathname: '/settings', search: '', hash: '' }, true)
+    ).toBeNull();
+  });
+
+  it('redirects signed-out users on Food and Settings tabs with a safe return path', () => {
+    expect(
+      getGuardRedirect({ pathname: '/food', search: '', hash: '' }, false)
+    ).toBe('/sign-in?redirect=%2Ffood');
+    expect(
+      getGuardRedirect({ pathname: '/settings', search: '', hash: '' }, false)
+    ).toBe('/sign-in?redirect=%2Fsettings');
+    expect(
+      getGuardRedirect(
+        { pathname: '/food', search: '?preview=1', hash: '#top' },
+        false
+      )
+    ).toBe('/sign-in?redirect=%2Ffood%3Fpreview%3D1%23top');
   });
 });
 
@@ -243,5 +273,34 @@ describe('resolveAppTab', () => {
   it('falls back to the water tab for unknown paths', () => {
     expect(resolveAppTab('/library')).toBe('water');
     expect(resolveAppTab('/recipes/123')).toBe('water');
+  });
+
+  it('does not treat lookalike prefixes as Food or Settings tabs', () => {
+    expect(resolveAppTab('/foodie')).toBe('water');
+    expect(resolveAppTab('/food-log')).toBe('water');
+    expect(resolveAppTab('/FOOD')).toBe('water');
+    expect(resolveAppTab('/settingsx')).toBe('water');
+    expect(resolveAppTab('/settings-old')).toBe('water');
+    expect(resolveAppTab('/sign-in')).toBe('water');
+  });
+
+  it('maps a path to Food or Settings only when it is that tab or a nested path', () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 0, maxLength: 40 }), (raw) => {
+        const pathname = raw.startsWith('/') ? raw : `/${raw}`;
+        const tab = resolveAppTab(pathname);
+        if (pathname === FOOD_PATH || pathname.startsWith(`${FOOD_PATH}/`)) {
+          expect(tab).toBe('food');
+        } else if (
+          pathname === SETTINGS_PATH ||
+          pathname.startsWith(`${SETTINGS_PATH}/`)
+        ) {
+          expect(tab).toBe('settings');
+        } else {
+          expect(tab).toBe('water');
+        }
+      }),
+      { numRuns: 200 }
+    );
   });
 });
