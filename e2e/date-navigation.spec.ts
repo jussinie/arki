@@ -73,8 +73,8 @@ for (const phone of [false, true]) {
         const next = page.getByRole('button', { name: 'Next day' });
         await expect(picker).toHaveAttribute('type', 'date');
         await expect(picker).toHaveValue(TODAY);
-        await expect(page.getByText(TODAY, { exact: true })).toBeVisible();
-        await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+        await expect(page.getByText(TODAY, { exact: true })).toHaveCount(0);
+        await expect(page.getByText('0.2 L', { exact: true })).toBeVisible();
 
         if (phone) {
           for (const control of [previous, next, picker]) {
@@ -97,14 +97,14 @@ for (const phone of [false, true]) {
         await next.click();
         await next.click();
         await expect(picker).toHaveValue('2026-11-21');
-        await expect(
-          page.getByText('2026-11-21', { exact: true })
-        ).toBeVisible();
+        await expect(page.getByText('2026-11-21', { exact: true })).toHaveCount(
+          0
+        );
 
         await picker.fill('2026-11-15');
         await expect(picker).toHaveValue('2026-11-15');
-        await expect(page.getByText('350 ml', { exact: true })).toBeVisible();
-        await expect(page.getByText("Day's water total")).toBeVisible();
+        await expect(page.getByText('0.35 L', { exact: true })).toBeVisible();
+        await expect(page.getByText("Day's water total")).toHaveCount(0);
         expect(requestedDays).toContain('2026-11-15');
 
         await today.click();
@@ -112,7 +112,7 @@ for (const phone of [false, true]) {
         await expect(
           page.getByRole('heading', { level: 2, name: 'Today', exact: true })
         ).toBeVisible();
-        await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+        await expect(page.getByText('0.2 L', { exact: true })).toBeVisible();
         await expect(today).toHaveCount(0);
         if (phone) await expectNoOverflow(page);
       });

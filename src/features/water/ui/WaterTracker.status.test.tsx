@@ -63,7 +63,9 @@ describe('WaterTracker loading and missing-goal states', () => {
     expect(
       screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('0 ml', { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Daily water goal' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows Loading water goal and still lets the user add water', () => {
@@ -75,7 +77,7 @@ describe('WaterTracker loading and missing-goal states', () => {
     expect(
       screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Day's water total")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
     expect(addWater.mutate).toHaveBeenCalledExactlyOnceWith({
@@ -95,7 +97,7 @@ describe('WaterTracker loading and missing-goal states', () => {
     expect(
       screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Day's water total")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
     expect(addWater.mutate).toHaveBeenCalledExactlyOnceWith({

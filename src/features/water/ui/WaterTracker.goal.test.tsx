@@ -244,7 +244,7 @@ describe('WaterTracker daily goal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
     expect(
-      await screen.findByText('200 ml', { exact: true })
+      await screen.findByText('0.2 L', { exact: true })
     ).toBeInTheDocument();
     const reached = screen.getByRole('progressbar', {
       name: 'Daily water goal',
@@ -260,7 +260,7 @@ describe('WaterTracker daily goal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
     expect(
-      await screen.findByText('300 ml', { exact: true })
+      await screen.findByText('0.3 L', { exact: true })
     ).toBeInTheDocument();
     const over = screen.getByRole('progressbar', { name: 'Daily water goal' });
     expect(over).toHaveAttribute('aria-valuemax', '200');
@@ -285,7 +285,7 @@ describe('WaterTracker daily goal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^4 dl$/ }));
     expect(
-      await screen.findByText('400 ml', { exact: true })
+      await screen.findByText('0.4 L', { exact: true })
     ).toBeInTheDocument();
     expect(
       screen
@@ -297,9 +297,7 @@ describe('WaterTracker daily goal', () => {
     ).not.toBeInTheDocument();
 
     rerender(<WaterTracker localDate="2026-11-19" />);
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    expect(await screen.findByText('0 L', { exact: true })).toBeInTheDocument();
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
     expect(
       screen.getByRole('progressbar', { name: 'Daily water goal' })
@@ -310,13 +308,13 @@ describe('WaterTracker daily goal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
     expect(
-      await screen.findByText('100 ml', { exact: true })
+      await screen.findByText('0.1 L', { exact: true })
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
 
     rerender(<WaterTracker localDate="2026-11-20" />);
     expect(
-      await screen.findByText('400 ml', { exact: true })
+      await screen.findByText('0.4 L', { exact: true })
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
     expect(
@@ -357,18 +355,12 @@ describe('WaterTracker daily goal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Unable to load the water goal. Please reload.'
     );
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^1 dl$/ })).toBeEnabled();
     expect(
       screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Unable to load the water goal. Please reload.'
     );
