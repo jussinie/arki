@@ -652,4 +652,89 @@ describe('app navigation', () => {
     expect(screen.getByText('Work in progress')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/settings');
   });
+
+  it('keeps app identity and sign-out on the Food and Settings stubs', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { name: 'Today' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Food' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Arki' })).toBeInTheDocument();
+    expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Arki' })).toBeInTheDocument();
+    expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+  });
+
+  it('keeps the selected day when switching to Food and back to Water', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { name: 'Today' });
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-19');
+
+    fireEvent.click(screen.getByRole('link', { name: 'Food' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Choose date')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Water' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Thu, 19 Nov 2026' })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-19');
+  });
+
+  it('does not stack a history entry when the current tab is clicked again', async () => {
+    render(<App localDate="2026-11-20" />);
+    await screen.findByRole('heading', { name: 'Today' });
+    fireEvent.click(screen.getByRole('link', { name: 'Food' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+
+    const pushState = vi.spyOn(window.history, 'pushState');
+    fireEvent.click(screen.getByRole('link', { name: 'Food' }));
+
+    expect(pushState).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/food');
+    expect(screen.getByRole('heading', { name: 'Food' })).toBeInTheDocument();
+    pushState.mockRestore();
+  });
+
+  it('signs out from the Food tab to a clean /sign-in without a tab redirect', async () => {
+    window.history.replaceState(null, '', '/food');
+    let signedIn = true;
+    auth.getSession.mockImplementation(async () => ({
+      data: { session: signedIn ? { user } : null },
+      error: null,
+    }));
+    auth.signOut.mockImplementation(async () => {
+      signedIn = false;
+      return { error: null };
+    });
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('');
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary' })
+    ).not.toBeInTheDocument();
+  });
 });

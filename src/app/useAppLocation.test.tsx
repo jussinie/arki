@@ -85,4 +85,32 @@ describe('useAppLocation', () => {
     expect(pushState).not.toHaveBeenCalled();
     pushState.mockRestore();
   });
+
+  it('push does not add a duplicate history entry when search and hash also match', () => {
+    window.history.replaceState(null, '', '/food?tab=log#top');
+    const { result } = renderHook(() => useAppLocation());
+    const pushState = vi.spyOn(window.history, 'pushState');
+
+    act(() => {
+      result.current.push('/food?tab=log#top');
+    });
+
+    expect(pushState).not.toHaveBeenCalled();
+    pushState.mockRestore();
+  });
+
+  it('push adds a history entry when the path matches but hash differs', () => {
+    window.history.replaceState(null, '', '/food#top');
+    const { result } = renderHook(() => useAppLocation());
+    const pushState = vi.spyOn(window.history, 'pushState');
+
+    act(() => {
+      result.current.push('/food');
+    });
+
+    expect(pushState).toHaveBeenCalledWith(null, '', '/food');
+    expect(window.location.pathname).toBe('/food');
+    expect(window.location.hash).toBe('');
+    pushState.mockRestore();
+  });
 });
