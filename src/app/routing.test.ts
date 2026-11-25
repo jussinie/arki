@@ -87,10 +87,30 @@ describe('sanitizeReturnPath', () => {
           expect(parsed.pathname.startsWith('//')).toBe(false);
           expect(parsed.pathname).not.toBe(SIGN_IN_PATH);
           expect(parsed.pathname.startsWith(`${SIGN_IN_PATH}/`)).toBe(false);
+          for (let i = 0; i < result.length; i += 1) {
+            const code = result.charCodeAt(i);
+            expect(code > 0x1f && code !== 0x7f).toBe(true);
+          }
         }
       }),
       { numRuns: 500 }
     );
+  });
+
+  it('accepts Finnish unicode internal paths as same-origin returns', () => {
+    const dayPath = sanitizeReturnPath('/päivä');
+    expect(dayPath).not.toBeNull();
+    const dayUrl = new URL(dayPath as string, 'https://arki.local');
+    expect(dayUrl.origin).toBe('https://arki.local');
+    expect(decodeURIComponent(dayUrl.pathname)).toBe('/päivä');
+
+    const searchPath = sanitizeReturnPath('/päivät?q=kaurapuuro#vesi');
+    expect(searchPath).not.toBeNull();
+    const searchUrl = new URL(searchPath as string, 'https://arki.local');
+    expect(searchUrl.origin).toBe('https://arki.local');
+    expect(decodeURIComponent(searchUrl.pathname)).toBe('/päivät');
+    expect(searchUrl.search).toBe('?q=kaurapuuro');
+    expect(searchUrl.hash).toBe('#vesi');
   });
 });
 
@@ -185,6 +205,26 @@ describe('getGuardRedirect', () => {
       )
     ).toBe('/days/2026-11-19');
     expect(
+      getGuardRedirect(
+        {
+          pathname: '/sign-in',
+          search: '?redirect=%2Ffood',
+          hash: '',
+        },
+        true
+      )
+    ).toBe('/food');
+    expect(
+      getGuardRedirect(
+        {
+          pathname: '/sign-in',
+          search: '?redirect=%2Fsettings',
+          hash: '',
+        },
+        true
+      )
+    ).toBe('/settings');
+    expect(
       getGuardRedirect({ pathname: '/sign-in', search: '', hash: '' }, true)
     ).toBe('/');
     expect(
@@ -200,6 +240,24 @@ describe('getGuardRedirect', () => {
         true
       )
     ).toBe('/');
+  });
+
+  it('redirects signed-out users on nested Food and Settings paths with a safe return path', () => {
+    expect(
+      getGuardRedirect({ pathname: '/food/', search: '', hash: '' }, false)
+    ).toBe('/sign-in?redirect=%2Ffood%2F');
+    expect(
+      getGuardRedirect(
+        { pathname: '/food/log', search: '?tab=recent', hash: '#top' },
+        false
+      )
+    ).toBe('/sign-in?redirect=%2Ffood%2Flog%3Ftab%3Drecent%23top');
+    expect(
+      getGuardRedirect(
+        { pathname: '/settings/profile', search: '', hash: '' },
+        false
+      )
+    ).toBe('/sign-in?redirect=%2Fsettings%2Fprofile');
   });
 
   it('keeps signed-in users on app routes without redirecting', () => {

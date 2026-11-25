@@ -98,6 +98,49 @@ test.describe('Bottom tab navigation (ARK-46)', () => {
     await expect(page.getByText('Work in progress')).toBeVisible();
   });
 
+  test('failed sign-in from /food keeps the return path so a retry lands on Food', async ({
+    page,
+  }) => {
+    await page.goto('/food');
+    await expect(page).toHaveURL('/sign-in?redirect=%2Ffood');
+
+    await page.getByLabel('Email').fill(TEST_EMAIL);
+    await page.getByLabel('Password').fill('wrong-password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL('/sign-in?redirect=%2Ffood');
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Food', exact: true })
+    ).toHaveCount(0);
+
+    await page.getByLabel('Password').fill(TEST_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL('/food');
+    await expect(
+      page.getByRole('heading', { name: 'Food', exact: true })
+    ).toBeVisible();
+  });
+
+  test('signed-in users with a Food redirect skip sign-in and open Food', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await signIn(page);
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+
+    await page.goto('/sign-in?redirect=%2Ffood');
+
+    await expect(page).toHaveURL('/food');
+    await expect(
+      page.getByRole('heading', { name: 'Food', exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0);
+  });
+
   test('centers the app column and pins the tab bar to the viewport bottom', async ({
     page,
   }) => {

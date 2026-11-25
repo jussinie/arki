@@ -177,6 +177,7 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
   let userAClient: SupabaseClient<Database>;
   let userBClient: SupabaseClient<Database>;
   let userAId: string;
+  let userBId: string;
   const userACreatedIds: string[] = [];
 
   beforeAll(async () => {
@@ -199,6 +200,7 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
       TEST_PASSWORD
     );
     userBClient = userB.client;
+    userBId = userB.userId;
   });
 
   afterEach(async () => {
@@ -404,6 +406,54 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
       amount_ml: 250,
       local_date: '2026-11-20',
     });
+  });
+
+  it('does not let the owner reassign a water entry or change its local_date', async () => {
+    const entryId = crypto.randomUUID();
+    userACreatedIds.push(entryId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: entryId,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(insertError).toBeNull();
+
+    const { data: reassigned, error: reassignError } = await userAClient
+      .from('water_entries')
+      .update({ user_id: userBId })
+      .eq('id', entryId)
+      .select('id, user_id, amount_ml, local_date');
+    expect(reassignError !== null || reassigned?.length === 0).toBe(true);
+
+    const { data: movedDate, error: dateError } = await userAClient
+      .from('water_entries')
+      .update({ local_date: '2026-11-19' })
+      .eq('id', entryId)
+      .select('id, amount_ml, local_date');
+    expect(dateError !== null || movedDate?.length === 0).toBe(true);
+
+    const { data: ownerRow, error: ownerError } = await userAClient
+      .from('water_entries')
+      .select('id, user_id, amount_ml, local_date')
+      .eq('id', entryId)
+      .single();
+    expect(ownerError).toBeNull();
+    expect(ownerRow).toEqual({
+      id: entryId,
+      user_id: userAId,
+      amount_ml: 250,
+      local_date: '2026-11-20',
+    });
+
+    const { data: userBRead, error: userBReadError } = await userBClient
+      .from('water_entries')
+      .select('*')
+      .eq('id', entryId);
+    expect(userBReadError).toBeNull();
+    expect(userBRead).toEqual([]);
   });
 
   it('rejects local_date values that are not calendar dates', async () => {
