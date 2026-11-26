@@ -62,8 +62,7 @@ export function WaterTracker({
             <ul className="water__entries" aria-label="Water entries">
               {entries.map((entry) => (
                 <li key={entry.id} className="water__entry">
-                  <span className="water__entry-amount">{entry.amountMl}</span>
-                  <span className="water__entry-unit"> ml</span>
+                  {entry.amountMl} ml
                 </li>
               ))}
             </ul>

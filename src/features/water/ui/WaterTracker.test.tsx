@@ -144,6 +144,17 @@ vi.mock('../../../shared/date', () => ({
   },
 }));
 
+async function expectDayTotal(amount: string) {
+  const label = await screen.findByText("Day's water total");
+  const total = label.parentElement;
+  if (!(total instanceof HTMLElement)) {
+    throw new Error("Missing day's water total");
+  }
+  expect(
+    await within(total).findByText(amount, { exact: true })
+  ).toBeInTheDocument();
+}
+
 function renderTracker(createOpId?: () => string) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -180,9 +191,7 @@ describe('WaterTracker', () => {
     expect(
       await screen.findByText('2026-11-20', { exact: true })
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
     expect(
       screen.queryByRole('button', { name: /250|2[,.]5/ })
     ).not.toBeInTheDocument();
@@ -191,9 +200,7 @@ describe('WaterTracker', () => {
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
 
     expect(createOpId).toHaveBeenCalledOnce();
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('200 ml');
     expect(screen.queryByText('0 ml', { exact: true })).not.toBeInTheDocument();
     expect(queryClient.getQueryData(['water-entries', '2026-11-20'])).toEqual([
       { id: 'op-click', amountMl: 200, localDate: '2026-11-20' },
@@ -217,24 +224,16 @@ describe('WaterTracker', () => {
     expect(createOpId).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
-    expect(
-      await screen.findByText('100 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('100 ml');
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('300 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('300 ml');
 
     fireEvent.click(screen.getByRole('button', { name: /^3 dl$/ }));
-    expect(
-      await screen.findByText('600 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('600 ml');
 
     fireEvent.click(screen.getByRole('button', { name: /^4 dl$/ }));
-    expect(
-      await screen.findByText('1000 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('1000 ml');
 
     expect(createOpId).toHaveBeenCalledTimes(4);
     expect(queryClient.getQueryData(['water-entries', '2026-11-20'])).toEqual([
@@ -273,7 +272,7 @@ describe('WaterTracker', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent(/^200 ml$/);
     expect(items[1]).toHaveTextContent(/^500 ml$/);
-    expect(screen.getByText('700 ml', { exact: true })).toBeInTheDocument();
+    await expectDayTotal('700 ml');
     expect(
       screen.queryByText('999 ml', { exact: true })
     ).not.toBeInTheDocument();
@@ -297,14 +296,10 @@ describe('WaterTracker', () => {
     ]);
     renderTracker(() => 'op-added');
 
-    expect(
-      await screen.findByText('700 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('700 ml');
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
 
-    expect(
-      await screen.findByText('800 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('800 ml');
     const labels = within(screen.getByRole('list', { name: 'Water entries' }))
       .getAllByRole('listitem')
       .map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
@@ -328,9 +323,7 @@ describe('WaterTracker', () => {
 
   it('shows an error alert when adding water fails', async () => {
     renderTracker(() => 'op-fail');
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
 
     db.setUpsertError(new Error('insert failed'));
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
@@ -338,6 +331,6 @@ describe('WaterTracker', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not add water. Try again.'
     );
-    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
+    await expectDayTotal('0 ml');
   });
 });

@@ -14,6 +14,10 @@ async function expectPhoneControl(control: Locator) {
   ).toBe('16px');
 }
 
+function dayTotal(page: Page, amount: string) {
+  return page.locator('.water__total').getByText(amount, { exact: true });
+}
+
 async function expectNoOverflow(page: Page) {
   expect(
     await page.evaluate(
@@ -74,7 +78,7 @@ for (const phone of [false, true]) {
         await expect(picker).toHaveAttribute('type', 'date');
         await expect(picker).toHaveValue(TODAY);
         await expect(page.getByText(TODAY, { exact: true })).toBeVisible();
-        await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+        await expect(dayTotal(page, '200 ml')).toBeVisible();
 
         if (phone) {
           for (const control of [previous, next, picker]) {
@@ -103,7 +107,7 @@ for (const phone of [false, true]) {
 
         await picker.fill('2026-11-15');
         await expect(picker).toHaveValue('2026-11-15');
-        await expect(page.getByText('350 ml', { exact: true })).toBeVisible();
+        await expect(dayTotal(page, '350 ml')).toBeVisible();
         await expect(page.getByText("Day's water total")).toBeVisible();
         expect(requestedDays).toContain('2026-11-15');
 
@@ -112,7 +116,7 @@ for (const phone of [false, true]) {
         await expect(
           page.getByRole('heading', { level: 2, name: 'Today', exact: true })
         ).toBeVisible();
-        await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+        await expect(dayTotal(page, '200 ml')).toBeVisible();
         await expect(today).toHaveCount(0);
         if (phone) await expectNoOverflow(page);
       });

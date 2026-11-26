@@ -78,6 +78,10 @@ test.afterAll(async () => {
   await clearWaterForStoryDay();
 });
 
+function dayTotal(page: Page, amount: string) {
+  return page.locator('.water__total').getByText(amount, { exact: true });
+}
+
 function storyInstant(): Date {
   const now = Date.now();
   const start = Date.parse(`${STORY_DAY}T00:00:00Z`);
@@ -110,20 +114,20 @@ test.describe('Add water to today', () => {
     await signIn(page);
 
     await expect(page.getByText(STORY_DAY, { exact: true })).toBeVisible();
-    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '0 ml')).toBeVisible();
     await expect(page.getByRole('button', { name: /250|2[,.]5/ })).toHaveCount(
       0
     );
 
     await page.getByRole('button', { name: '2 dl', exact: true }).click();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '200 ml')).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toHaveCount(0);
 
     await page.reload();
     await expect(
       page.getByRole('heading', { name: 'Today', exact: true })
     ).toBeVisible();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '200 ml')).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toHaveCount(0);
   });
 
@@ -144,25 +148,25 @@ test.describe('Add water to today', () => {
     await expect(
       page.getByRole('button', { name: '4 dl', exact: true })
     ).toBeVisible();
-    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '0 ml')).toBeVisible();
 
     await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('100 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '100 ml')).toBeVisible();
 
     await page.getByRole('button', { name: '2 dl', exact: true }).click();
-    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '300 ml')).toBeVisible();
 
     await page.getByRole('button', { name: '3 dl', exact: true }).click();
-    await expect(page.getByText('600 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '600 ml')).toBeVisible();
 
     await page.getByRole('button', { name: '4 dl', exact: true }).click();
-    await expect(page.getByText('1000 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '1000 ml')).toBeVisible();
 
     await page.reload();
     await expect(
       page.getByRole('heading', { name: 'Today', exact: true })
     ).toBeVisible();
-    await expect(page.getByText('1000 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '1000 ml')).toBeVisible();
     await expect(page.getByText('0 ml', { exact: true })).toHaveCount(0);
   });
 });
@@ -188,7 +192,7 @@ test.describe('Add water on a phone', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
 
     await add.click();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '200 ml')).toBeVisible();
   });
 
   test('the decilitre buttons fit and stay tappable', async ({ page }) => {
@@ -211,6 +215,6 @@ test.describe('Add water on a phone', () => {
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
 
     await page.getByRole('button', { name: '2 dl', exact: true }).click();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '200 ml')).toBeVisible();
   });
 });

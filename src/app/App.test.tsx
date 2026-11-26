@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { App } from './App';
@@ -58,6 +64,17 @@ const db = vi.hoisted(() => {
 vi.mock('../shared/supabase', () => ({ supabase: { auth, from: db.from } }));
 
 const user = { id: 'synthetic-user', email: 'test@example.com' };
+
+async function expectDayTotal(amount: string) {
+  const label = await screen.findByText("Day's water total");
+  const total = label.parentElement;
+  if (!(total instanceof HTMLElement)) {
+    throw new Error("Missing day's water total");
+  }
+  expect(
+    await within(total).findByText(amount, { exact: true })
+  ).toBeInTheDocument();
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -119,13 +136,9 @@ describe('App', () => {
     expect(
       await screen.findByText('2026-11-20', { exact: true })
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('200 ml');
   });
 
   it('restores Today from an existing session', async () => {
@@ -389,35 +402,27 @@ describe('day navigation', () => {
 
   it('loads and adds water for the picked day without changing today', async () => {
     render(<App localDate="2026-11-20" />);
-    await screen.findByText('0 ml', { exact: true });
+    await expectDayTotal('0 ml');
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    await screen.findByText('200 ml', { exact: true });
+    await expectDayTotal('200 ml');
 
     fireEvent.change(screen.getByLabelText('Choose date'), {
       target: { value: '2026-11-15' },
     });
     expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-15');
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
     expect(screen.getByText("Day's water total")).toBeInTheDocument();
     expect(screen.queryByText("Today's water total")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^3 dl$/ }));
-    expect(
-      await screen.findByText('300 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('300 ml');
 
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('200 ml');
     fireEvent.change(screen.getByLabelText('Choose date'), {
       target: { value: '2026-11-15' },
     });
-    expect(
-      await screen.findByText('300 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('300 ml');
   });
 
   it('keeps the selected day when the calendar is cleared or receives an invalid date', async () => {

@@ -98,6 +98,10 @@ async function signIn(page: Page, localDate: string) {
   ).toBeVisible();
 }
 
+function dayTotal(page: Page, amount: string) {
+  return page.locator('.water__total').getByText(amount, { exact: true });
+}
+
 function goalBar(page: Page): Locator {
   return page.getByRole('progressbar', { name: 'Daily water goal' });
 }
@@ -114,7 +118,7 @@ test.describe('Daily water goal', () => {
     const bar = goalBar(page);
     await expect(bar).toHaveAttribute('aria-valuemax', '2000');
     await expect(bar).toHaveAttribute('aria-valuenow', '0');
-    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '0 ml')).toBeVisible();
     await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
       0
     );
@@ -142,7 +146,7 @@ test.describe('Daily water goal', () => {
     await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '200');
 
     await page.getByRole('button', { name: '2 dl', exact: true }).click();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '200 ml')).toBeVisible();
     const check = page.getByRole('img', { name: 'Goal reached' });
     await expect(check).toBeVisible();
     await expect(goalBar(page)).toHaveAttribute('aria-valuenow', '200');
@@ -165,7 +169,7 @@ test.describe('Daily water goal', () => {
     expect(checkBox!.x).toBeGreaterThanOrEqual(barBox!.x + barBox!.width - 1);
 
     await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '300 ml')).toBeVisible();
     await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
     await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '200');
     await expect(goalBar(page)).toHaveAttribute('aria-valuenow', '200');
@@ -188,14 +192,14 @@ test.describe('Daily water goal', () => {
     await page.clock.setFixedTime(new Date(`${DAY_TWO}T12:00:00Z`));
     await page.reload();
     await expect(page.getByText(DAY_TWO, { exact: true })).toBeVisible();
-    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '0 ml')).toBeVisible();
     await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
     await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
       0
     );
 
     await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('100 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '100 ml')).toBeVisible();
     await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
     await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
       0
@@ -204,7 +208,7 @@ test.describe('Daily water goal', () => {
     await page.clock.setFixedTime(new Date(`${DAY_ONE}T12:00:00Z`));
     await page.reload();
     await expect(page.getByText(DAY_ONE, { exact: true })).toBeVisible();
-    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '300 ml')).toBeVisible();
     await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
     await expect(page.getByRole('img', { name: 'Goal reached' })).toBeVisible();
   });

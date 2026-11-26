@@ -126,6 +126,10 @@ test.afterAll(async () => {
   await clearStoryDays();
 });
 
+function dayTotal(page: Page, amount: string) {
+  return page.locator('.water__total').getByText(amount, { exact: true });
+}
+
 async function signIn(page: Page) {
   await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00Z`));
   await page.goto('/');
@@ -149,12 +153,12 @@ test.describe('See the day water entries', () => {
     await expect(page.getByText(STORY_DAY, { exact: true })).toBeVisible();
     const list = page.getByRole('list', { name: 'Water entries' });
     await expect(list.getByRole('listitem')).toHaveText(['200 ml', '500 ml']);
-    await expect(page.getByText('700 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '700 ml')).toBeVisible();
     await expect(page.getByText('999 ml', { exact: true })).toHaveCount(0);
     await expect(list).not.toContainText('999');
 
     await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('800 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '800 ml')).toBeVisible();
     await expect(list.getByRole('listitem')).toHaveText([
       '200 ml',
       '500 ml',
@@ -172,7 +176,7 @@ test.describe('See the day water entries on a phone', () => {
 
     const list = page.getByRole('list', { name: 'Water entries' });
     await expect(list.getByRole('listitem')).toHaveText(['200 ml', '500 ml']);
-    await expect(page.getByText('700 ml', { exact: true })).toBeVisible();
+    await expect(dayTotal(page, '700 ml')).toBeVisible();
 
     for (const item of await list.getByRole('listitem').all()) {
       const box = await item.boundingBox();

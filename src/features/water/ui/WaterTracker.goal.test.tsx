@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -167,6 +167,17 @@ vi.mock('../../../shared/date', () => ({
   },
 }));
 
+async function expectDayTotal(amount: string) {
+  const label = await screen.findByText("Day's water total");
+  const total = label.parentElement;
+  if (!(total instanceof HTMLElement)) {
+    throw new Error("Missing day's water total");
+  }
+  expect(
+    await within(total).findByText(amount, { exact: true })
+  ).toBeInTheDocument();
+}
+
 function renderTracker(localDate = '2026-11-20') {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -243,9 +254,7 @@ describe('WaterTracker daily goal', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('200 ml');
     const reached = screen.getByRole('progressbar', {
       name: 'Daily water goal',
     });
@@ -259,9 +268,7 @@ describe('WaterTracker daily goal', () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
-    expect(
-      await screen.findByText('300 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('300 ml');
     const over = screen.getByRole('progressbar', { name: 'Daily water goal' });
     expect(over).toHaveAttribute('aria-valuemax', '200');
     expect(over).toHaveAttribute('aria-valuenow', '200');
@@ -284,9 +291,7 @@ describe('WaterTracker daily goal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /^4 dl$/ }));
-    expect(
-      await screen.findByText('400 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('400 ml');
     expect(
       screen
         .getByRole('progressbar', { name: 'Daily water goal' })
@@ -297,9 +302,7 @@ describe('WaterTracker daily goal', () => {
     ).not.toBeInTheDocument();
 
     rerender(<WaterTracker localDate="2026-11-19" />);
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
     expect(
       screen.getByRole('progressbar', { name: 'Daily water goal' })
@@ -309,15 +312,11 @@ describe('WaterTracker daily goal', () => {
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
-    expect(
-      await screen.findByText('100 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('100 ml');
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
 
     rerender(<WaterTracker localDate="2026-11-20" />);
-    expect(
-      await screen.findByText('400 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('400 ml');
     expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
     expect(
       screen.queryByRole('img', { name: 'Goal reached' })
@@ -357,18 +356,14 @@ describe('WaterTracker daily goal', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Unable to load the water goal. Please reload.'
     );
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('0 ml');
     expect(screen.getByRole('button', { name: /^1 dl$/ })).toBeEnabled();
     expect(
       screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
+    await expectDayTotal('200 ml');
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Unable to load the water goal. Please reload.'
     );
