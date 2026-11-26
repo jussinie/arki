@@ -25,6 +25,3 @@ alter table public.water_goals
 alter table public.water_goals
   add constraint water_goals_user_date_kind_pkey
   primary key (user_id, local_date, single_day);
-
-create index water_goals_user_local_date_idx
-  on public.water_goals (user_id, local_date desc);

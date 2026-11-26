@@ -28,3 +28,4 @@ The migration backfills each existing one-per-user goal as a change point starti
 - − Two row kinds in one table (`single_day` flag) — the flag must be respected by every reader/writer.
 - − Days before the first change point show no goal; there is no default goal anymore (previously 2 L).
 - − The migration date, not a user-chosen date, starts pre-existing goals (ADR 7 is bent once for backfill; `current_date` is the deploy day in each environment).
+- − `current_date` is the server's UTC date: users behind UTC whose deploy happens before their local midnight get their carried-forward goal starting one day ahead, so that day briefly shows no goal. The skew is transient (self-heals within 24 h) and inherent to any single backfill date; verify once on staging around the deploy window.

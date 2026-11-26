@@ -739,6 +739,19 @@ describe('water_goals per-day rows, resolution, and RLS (ARK-49)', () => {
     );
     expect(spoofUpsertError).not.toBeNull();
 
+    // Upserting User A's existing key takes the UPDATE path; the policy's
+    // USING clause must reject it just like the INSERT path above.
+    const { error: spoofUpdateUpsertError } = await goals(userBClient).upsert(
+      {
+        user_id: userAId,
+        local_date: '2026-11-20',
+        goal_ml: 3000,
+        single_day: false,
+      },
+      { onConflict: 'user_id,local_date,single_day' }
+    );
+    expect(spoofUpdateUpsertError).not.toBeNull();
+
     const { data: userBUpdate } = await goals(userBClient)
       .update({ goal_ml: 3000 })
       .eq('local_date', '2026-11-20')
