@@ -91,15 +91,10 @@ export function useAddWater() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (entry: WaterEntry) => addWaterEntry(entry),
-    onSuccess: (savedEntry) => {
-      queryClient.setQueryData<readonly WaterEntry[]>(
-        waterEntriesKey(savedEntry.localDate),
-        (current = []) =>
-          current.some((item) => item.id === savedEntry.id)
-            ? current
-            : [...current, savedEntry]
-      );
-    },
+    onSuccess: (savedEntry) =>
+      queryClient.invalidateQueries({
+        queryKey: waterEntriesKey(savedEntry.localDate),
+      }),
   });
 }
 

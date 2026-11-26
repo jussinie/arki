@@ -1,6 +1,7 @@
 import {
   QUICK_ADD_WATER_DL,
   createClientOpId,
+  waterEntriesOnLocalDate,
   waterMlFromDl,
   waterTotalMl,
 } from '../model';
@@ -36,7 +37,8 @@ export function WaterTracker({
     });
   }
 
-  const totalMl = waterTotalMl(day.data ?? [], localDate);
+  const entries = waterEntriesOnLocalDate(day.data ?? [], localDate);
+  const totalMl = waterTotalMl(entries, localDate);
 
   return (
     <section className="water" aria-labelledby="water-heading">
@@ -56,6 +58,16 @@ export function WaterTracker({
             <span className="water__label">Day's water total</span>
             <span className="water__amount">{totalMl} ml</span>
           </p>
+          {entries.length > 0 ? (
+            <ul className="water__entries" aria-label="Water entries">
+              {entries.map((entry) => (
+                <li key={entry.id} className="water__entry">
+                  <span className="water__entry-amount">{entry.amountMl}</span>
+                  <span className="water__entry-unit"> ml</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {goal.isPending ? (
             <p role="status">Loading water goal…</p>
           ) : goal.isError || goal.data === undefined ? (
