@@ -11,45 +11,85 @@ const auth = vi.hoisted(() => ({
 
 const db = vi.hoisted(() => {
   const rows: Array<{ id: string; amount_ml: number; local_date: string }> = [];
+  const goalRows: Array<{
+    user_id: string;
+    local_date: string;
+    goal_ml: number;
+    single_day: boolean;
+  }> = [];
 
-  const from = vi.fn((_table: string) => ({
-    select: () => ({
-      maybeSingle: async () => ({ data: null, error: null }),
-      eq: (column: 'local_date' | 'id', value: string) => {
-        const filtered = rows.filter((row) => row[column] === value);
-        return {
-          order: async () => ({ data: [...filtered], error: null }),
-          single: async () => ({
-            data: filtered[0] ?? null,
-            error: filtered[0] ? null : new Error('Row not found'),
-          }),
-        };
-      },
-    }),
-    upsert: (
-      payload: { id: string; amount_ml: number; local_date: string },
-      options?: { ignoreDuplicates?: boolean }
-    ) => ({
-      select: () => ({
-        maybeSingle: async () => {
-          const existing = rows.find((row) => row.id === payload.id);
-          if (existing) {
-            return options?.ignoreDuplicates
-              ? { data: null, error: null }
-              : { data: existing, error: null };
+  const from = vi.fn((table: string) => {
+    if (table === 'water_goals') {
+      return {
+        select: (columns: string) => {
+          if (columns !== 'local_date, goal_ml, single_day') {
+            throw new Error(`Unexpected columns ${columns}`);
           }
-          const stored = { ...payload };
-          rows.push(stored);
-          return { data: stored, error: null };
+          return {
+            order: async () => ({
+              data: [...goalRows].sort((a, b) =>
+                a.local_date.localeCompare(b.local_date)
+              ),
+              error: null,
+            }),
+          };
+        },
+        upsert: (
+          payload: {
+            user_id: string;
+            local_date: string;
+            goal_ml: number;
+            single_day: boolean;
+          },
+          options?: { onConflict?: string }
+        ) => ({
+          select: () => ({
+            single: async () => ({ data: { ...payload }, error: null }),
+          }),
+        }),
+      };
+    }
+
+    return {
+      select: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+        eq: (column: 'local_date' | 'id', value: string) => {
+          const filtered = rows.filter((row) => row[column] === value);
+          return {
+            order: async () => ({ data: [...filtered], error: null }),
+            single: async () => ({
+              data: filtered[0] ?? null,
+              error: filtered[0] ? null : new Error('Row not found'),
+            }),
+          };
         },
       }),
-    }),
-  }));
+      upsert: (
+        payload: { id: string; amount_ml: number; local_date: string },
+        options?: { ignoreDuplicates?: boolean }
+      ) => ({
+        select: () => ({
+          maybeSingle: async () => {
+            const existing = rows.find((row) => row.id === payload.id);
+            if (existing) {
+              return options?.ignoreDuplicates
+                ? { data: null, error: null }
+                : { data: existing, error: null };
+            }
+            const stored = { ...payload };
+            rows.push(stored);
+            return { data: stored, error: null };
+          },
+        }),
+      }),
+    };
+  });
 
   return {
     from,
     reset() {
       rows.length = 0;
+      goalRows.length = 0;
       from.mockClear();
     },
   };
@@ -538,14 +578,21 @@ describe('app navigation', () => {
     expect(window.location.pathname).toBe('/');
   });
 
-  it('renders the Settings stub page from the /settings path', async () => {
+  it('renders the Settings page with the water goal editor from the /settings path', async () => {
     window.history.replaceState(null, '', '/settings');
     render(<App localDate="2026-11-20" />);
 
     expect(
       await screen.findByRole('heading', { name: 'Settings' })
     ).toBeInTheDocument();
-    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Work in progress')
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Goal date')).toHaveValue('2026-11-20');
+    expect(screen.getByLabelText('Daily water goal (L)')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Save goal' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'aria-current',
       'page'
@@ -649,7 +696,9 @@ describe('app navigation', () => {
     expect(
       await screen.findByRole('heading', { name: 'Settings' })
     ).toBeInTheDocument();
-    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Daily water goal (L)')
+    ).toBeInTheDocument();
     expect(window.location.pathname).toBe('/settings');
   });
 });

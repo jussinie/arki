@@ -1,10 +1,12 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'node:child_process';
 import type { Database } from '../src/shared/supabase/database.types';
 
-const DAY_ONE = '2026-11-20';
-const DAY_TWO = '2026-11-19';
+const TODAY = '2026-11-20';
+const TOMORROW = '2026-11-21';
+const YESTERDAY = '2026-11-19';
+const BEFORE_ANY_GOAL = '2026-11-18';
 const TEST_EMAIL = 'other@example.com';
 const TEST_PASSWORD = 'Arki-test-password-123!';
 
@@ -44,7 +46,7 @@ function getSupabaseCredentials(): { url: string; anonKey: string } {
   return { url: parsed.API_URL, anonKey: parsed.ANON_KEY };
 }
 
-async function clearGoalUserData(): Promise<void> {
+async function createTestClient() {
   const { url, anonKey } = getSupabaseCredentials();
   const client = createClient<Database>(url, anonKey, {
     auth: {
@@ -61,11 +63,16 @@ async function clearGoalUserData(): Promise<void> {
   if (signInError) {
     throw signInError;
   }
+  return client;
+}
+
+async function clearGoalUserData(): Promise<void> {
+  const client = await createTestClient();
 
   const { error: deleteWaterError } = await client
     .from('water_entries')
     .delete()
-    .in('local_date', [DAY_ONE, DAY_TWO]);
+    .in('local_date', [TODAY, TOMORROW, YESTERDAY, BEFORE_ANY_GOAL]);
   if (deleteWaterError) {
     throw deleteWaterError;
   }
@@ -76,6 +83,22 @@ async function clearGoalUserData(): Promise<void> {
     .gte('goal_ml', 100);
   if (deleteGoalError) {
     throw deleteGoalError;
+  }
+}
+
+async function seedGoal(
+  localDate: string,
+  goalMl: number,
+  singleDay: boolean
+): Promise<void> {
+  const client = await createTestClient();
+  const { error } = await client.from('water_goals').insert({
+    local_date: localDate,
+    goal_ml: goalMl,
+    single_day: singleDay,
+  });
+  if (error) {
+    throw error;
   }
 }
 
@@ -98,160 +121,167 @@ async function signIn(page: Page, localDate: string) {
   ).toBeVisible();
 }
 
-function goalBar(page: Page): Locator {
+async function openSettings(page: Page) {
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+}
+
+function goalOrb(page: Page) {
   return page.getByRole('progressbar', { name: 'Daily water goal' });
 }
 
-test.describe('Daily water goal', () => {
+test.describe('Water goal in Settings', () => {
   test.use({ timezoneId: 'UTC' });
 
-  test('shows a 2 L goal on an empty bar whose track and fill differ', async ({
+  test('the Water page has no goal editing and shows an empty state until a goal is set', async ({
     page,
   }) => {
-    await signIn(page, DAY_ONE);
+    await signIn(page, TODAY);
 
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('2');
-    const bar = goalBar(page);
-    await expect(bar).toHaveAttribute('aria-valuemax', '2000');
-    await expect(bar).toHaveAttribute('aria-valuenow', '0');
     await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
+    await expect(
+      page.getByText('No water goal set. Set one in Settings.')
+    ).toBeVisible();
+    await expect(goalOrb(page)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save goal' })).toHaveCount(
       0
     );
-
-    const colors = await bar.evaluate((element) => {
-      const fill = element.querySelector('.water__bar-fill');
-      return {
-        track: getComputedStyle(element).backgroundColor,
-        fill: fill ? getComputedStyle(fill).backgroundColor : '',
-      };
-    });
-    expect(colors.track).not.toBe(colors.fill);
-    expect(colors.track).not.toBe('rgba(0, 0, 0, 0)');
-    expect(colors.fill).not.toBe('rgba(0, 0, 0, 0)');
-    expect(colors.fill).not.toBe('');
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveCount(0);
   });
 
-  test('caps the bar at the goal, keeps the full amount, and uses that goal on another day', async ({
+  test('a goal set for today in Settings applies from today onward', async ({
     page,
   }) => {
-    await signIn(page, DAY_ONE);
+    await signIn(page, TODAY);
+    await openSettings(page);
 
-    await page.getByLabel('Daily water goal (L)').fill('0.2');
+    await expect(page.getByLabel('Goal date')).toHaveValue(TODAY);
+    await expect(
+      page.getByText(
+        'Applies every day from Fri, 20 Nov 2026 until you change it.'
+      )
+    ).toBeVisible();
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('');
+
+    await page.getByLabel('Daily water goal (L)').fill('2.5');
     await page.getByRole('button', { name: 'Save goal' }).click();
-    await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '200');
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('2.5');
 
-    await page.getByRole('button', { name: '2 dl', exact: true }).click();
-    await expect(page.getByText('200 ml', { exact: true })).toBeVisible();
-    const check = page.getByRole('img', { name: 'Goal reached' });
-    await expect(check).toBeVisible();
-    await expect(goalBar(page)).toHaveAttribute('aria-valuenow', '200');
+    await page.getByRole('link', { name: 'Water' }).click();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '2500');
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuetext', '0 ml of 2.5 L');
+    await expect(page.getByText('of 2.5 L · 0%')).toBeVisible();
 
-    const checkColor = await check.evaluate(
-      (element) => getComputedStyle(element).color
-    );
-    const channels = checkColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-    expect(channels).not.toBeNull();
-    const red = Number(channels![1]);
-    const green = Number(channels![2]);
-    const blue = Number(channels![3]);
-    expect(green).toBeGreaterThan(red);
-    expect(green).toBeGreaterThan(blue);
-
-    const barBox = await goalBar(page).boundingBox();
-    const checkBox = await check.boundingBox();
-    expect(barBox).not.toBeNull();
-    expect(checkBox).not.toBeNull();
-    expect(checkBox!.x).toBeGreaterThanOrEqual(barBox!.x + barBox!.width - 1);
-
-    await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
-    await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '200');
-    await expect(goalBar(page)).toHaveAttribute('aria-valuenow', '200');
-    await expect(check).toBeVisible();
-
-    const widths = await goalBar(page).evaluate((element) => {
-      const fill = element.querySelector('.water__bar-fill');
-      const barRect = element.getBoundingClientRect();
-      const fillRect = fill?.getBoundingClientRect();
-      return {
-        bar: barRect.width,
-        fill: fillRect?.width ?? Number.POSITIVE_INFINITY,
-        scrollWidth: element.scrollWidth,
-        clientWidth: element.clientWidth,
-      };
-    });
-    expect(widths.fill).toBeLessThanOrEqual(widths.bar + 1);
-    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth + 1);
-
-    await page.clock.setFixedTime(new Date(`${DAY_TWO}T12:00:00Z`));
+    // The goal still applies on the next day.
+    await page.clock.setFixedTime(new Date(`${TOMORROW}T12:00:00Z`));
     await page.reload();
-    await expect(page.getByText(DAY_TWO, { exact: true })).toBeVisible();
-    await expect(page.getByText('0 ml', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
-    await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
-      0
-    );
-
-    await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(page.getByText('100 ml', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
-    await expect(page.getByRole('img', { name: 'Goal reached' })).toHaveCount(
-      0
-    );
-
-    await page.clock.setFixedTime(new Date(`${DAY_ONE}T12:00:00Z`));
-    await page.reload();
-    await expect(page.getByText(DAY_ONE, { exact: true })).toBeVisible();
-    await expect(page.getByText('300 ml', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('0.2');
-    await expect(page.getByRole('img', { name: 'Goal reached' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '2500');
   });
 
-  test('rejects a goal outside 0.1 L to 10 L', async ({ page }) => {
-    await signIn(page, DAY_ONE);
+  test('changing the goal on a later day preserves earlier days', async ({
+    page,
+  }) => {
+    await seedGoal(TODAY, 2500, false);
+    await signIn(page, TOMORROW);
+    await openSettings(page);
+
+    await expect(page.getByLabel('Goal date')).toHaveValue(TOMORROW);
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('2.5');
+
+    await page.getByLabel('Daily water goal (L)').fill('3');
+    await page.getByRole('button', { name: 'Save goal' }).click();
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('3');
+
+    await page.getByRole('link', { name: 'Water' }).click();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '3000');
+
+    await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00Z`));
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '2500');
+  });
+
+  test('a goal added for a past date affects only that date', async ({
+    page,
+  }) => {
+    await seedGoal(TODAY, 2500, false);
+    await signIn(page, TODAY);
+    await openSettings(page);
+
+    await page.getByLabel('Goal date').fill(YESTERDAY);
+    await expect(
+      page.getByText('Applies only to Thu, 19 Nov 2026.')
+    ).toBeVisible();
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('');
+
+    await page.getByLabel('Daily water goal (L)').fill('1');
+    await page.getByRole('button', { name: 'Save goal' }).click();
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('1');
+
+    await page.getByRole('link', { name: 'Water' }).click();
+    // Today keeps its own goal.
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '2500');
+
+    // Yesterday has the single-day goal.
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '1000');
+
+    // The day before any goal stays empty.
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await expect(
+      page.getByText('No water goal set. Set one in Settings.')
+    ).toBeVisible();
+    await expect(goalOrb(page)).toHaveCount(0);
+
+    // Back on yesterday the single-day goal applies again.
+    await page.getByRole('button', { name: 'Next day' }).click();
+    await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '1000');
+  });
+
+  test('rejects a goal outside 0.1 L to 10 L without saving', async ({
+    page,
+  }) => {
+    await signIn(page, TODAY);
+    await openSettings(page);
 
     await page.getByLabel('Daily water goal (L)').fill('0');
     await page.getByRole('button', { name: 'Save goal' }).click();
     await expect(page.getByRole('alert')).toHaveText(
       'Enter a goal between 0.1 and 10 L'
     );
-    await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '2000');
 
     await page.reload();
-    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('2');
-    await expect(goalBar(page)).toHaveAttribute('aria-valuemax', '2000');
+    await expect(
+      page.getByRole('heading', { name: 'Settings' })
+    ).toBeVisible();
+    await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('');
   });
 });
 
-test.describe('Daily water goal on a phone', () => {
+test.describe('Water goal in Settings on a phone', () => {
   test.use({ timezoneId: 'UTC', viewport: { width: 390, height: 844 } });
 
-  test('the goal field, save button, and bar fit and stay tappable', async ({
-    page,
-  }) => {
-    await signIn(page, DAY_ONE);
+  test('the goal form fits and stays tappable', async ({ page }) => {
+    await signIn(page, TODAY);
+    await openSettings(page);
 
+    const date = page.getByLabel('Goal date');
     const goal = page.getByLabel('Daily water goal (L)');
     const save = page.getByRole('button', { name: 'Save goal' });
-    const bar = goalBar(page);
-    await expect(goal).toBeVisible();
-    await expect(save).toBeVisible();
-    await expect(bar).toBeVisible();
 
-    for (const locator of [goal, save]) {
+    for (const locator of [date, goal, save]) {
+      await expect(locator).toBeVisible();
       const box = await locator.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.height).toBeGreaterThanOrEqual(44);
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(390);
     }
-
-    const barBox = await bar.boundingBox();
-    expect(barBox).not.toBeNull();
-    expect(barBox!.x).toBeGreaterThanOrEqual(0);
-    expect(barBox!.x + barBox!.width).toBeLessThanOrEqual(390);
 
     const overflow = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,

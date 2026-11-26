@@ -5,9 +5,10 @@ import type { Database } from '../../src/shared/supabase/database.types';
 import {
   addWaterEntry,
   listWaterEntries,
-  readWaterGoalMl,
-  saveWaterGoalMl,
+  listWaterGoals,
+  saveWaterGoal,
 } from '../../src/features/water/api';
+import { resolveWaterGoalMl } from '../../src/features/water/model';
 
 type SupabaseStatusJson = {
   API_URL?: string;
@@ -500,14 +501,13 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
   });
 });
 
-describe('water_goals table and RLS (ARK-33)', () => {
+describe('water_goals per-day rows, resolution, and RLS (ARK-49)', () => {
   const TEST_PASSWORD = 'Arki-test-password-123!';
   let anonClient: SupabaseClient<Database>;
   let userAClient: SupabaseClient<Database>;
   let userBClient: SupabaseClient<Database>;
   let userAId: string;
   let userBId: string;
-  const createdWaterIds: string[] = [];
 
   function goals(client: SupabaseClient<Database>) {
     return client.from('water_goals');
@@ -537,13 +537,6 @@ describe('water_goals table and RLS (ARK-33)', () => {
   });
 
   afterEach(async () => {
-    if (createdWaterIds.length > 0) {
-      await userAClient
-        .from('water_entries')
-        .delete()
-        .in('id', createdWaterIds);
-      createdWaterIds.length = 0;
-    }
     for (const client of [userAClient, userBClient]) {
       const { error } = await goals(client).delete().gte('goal_ml', 100);
       if (error && error.code !== 'PGRST205') {
@@ -557,68 +550,141 @@ describe('water_goals table and RLS (ARK-33)', () => {
     await userBClient?.auth.signOut({ scope: 'local' });
   });
 
-  it('stores one goal per user and does not keep a local date', async () => {
-    await expect(readWaterGoalMl(userAClient)).resolves.toBe(2000);
-
-    await expect(saveWaterGoalMl(2500, userAId, userAClient)).resolves.toBe(
-      2500
-    );
-    await expect(saveWaterGoalMl(1800, userAId, userAClient)).resolves.toBe(
-      1800
-    );
-
-    const { data: rows, error: readError } =
-      await goals(userAClient).select('user_id, goal_ml');
-    expect(readError).toBeNull();
-    expect(rows).toEqual([{ user_id: userAId, goal_ml: 1800 }]);
-
-    const { error: dateColumnError } =
-      await goals(userAClient).select('local_date');
-    expect(dateColumnError).not.toBeNull();
-
-    const firstWaterId = crypto.randomUUID();
-    const secondWaterId = crypto.randomUUID();
-    createdWaterIds.push(firstWaterId, secondWaterId);
-    await addWaterEntry(
-      { id: firstWaterId, amountMl: 250, localDate: '2026-11-20' },
+  it('stores a goal per day and keeps earlier days on their own goals after a later change', async () => {
+    await saveWaterGoal(
+      { localDate: '2026-11-19', goalMl: 2000, singleDay: false },
+      userAId,
       userAClient
     );
-    await addWaterEntry(
-      { id: secondWaterId, amountMl: 400, localDate: '2026-11-19' },
+    await saveWaterGoal(
+      { localDate: '2026-11-26', goalMl: 2500, singleDay: false },
+      userAId,
       userAClient
     );
 
-    await expect(readWaterGoalMl(userAClient)).resolves.toBe(1800);
-    await expect(readWaterGoalMl(userBClient)).resolves.toBe(2000);
+    const rows = await listWaterGoals(userAClient);
+    expect(rows).toEqual([
+      { localDate: '2026-11-19', goalMl: 2000, singleDay: false },
+      { localDate: '2026-11-26', goalMl: 2500, singleDay: false },
+    ]);
+
+    expect(resolveWaterGoalMl(rows, '2026-11-18')).toBeNull();
+    expect(resolveWaterGoalMl(rows, '2026-11-19')).toBe(2000);
+    expect(resolveWaterGoalMl(rows, '2026-11-25')).toBe(2000);
+    expect(resolveWaterGoalMl(rows, '2026-11-26')).toBe(2500);
+    expect(resolveWaterGoalMl(rows, '2026-12-01')).toBe(2500);
+  });
+
+  it('applies a goal set for a past date only to that date', async () => {
+    await saveWaterGoal(
+      { localDate: '2026-11-19', goalMl: 2000, singleDay: false },
+      userAId,
+      userAClient
+    );
+    await saveWaterGoal(
+      { localDate: '2026-11-23', goalMl: 3000, singleDay: true },
+      userAId,
+      userAClient
+    );
+
+    const rows = await listWaterGoals(userAClient);
+    expect(rows).toEqual([
+      { localDate: '2026-11-19', goalMl: 2000, singleDay: false },
+      { localDate: '2026-11-23', goalMl: 3000, singleDay: true },
+    ]);
+
+    expect(resolveWaterGoalMl(rows, '2026-11-22')).toBe(2000);
+    expect(resolveWaterGoalMl(rows, '2026-11-23')).toBe(3000);
+    expect(resolveWaterGoalMl(rows, '2026-11-24')).toBe(2000);
+  });
+
+  it('keeps a single-day exception beside a change point on the same date', async () => {
+    await saveWaterGoal(
+      { localDate: '2026-11-20', goalMl: 2000, singleDay: false },
+      userAId,
+      userAClient
+    );
+    await saveWaterGoal(
+      { localDate: '2026-11-20', goalMl: 1500, singleDay: true },
+      userAId,
+      userAClient
+    );
+
+    const rows = await listWaterGoals(userAClient);
+    expect(rows).toHaveLength(2);
+    expect(resolveWaterGoalMl(rows, '2026-11-20')).toBe(1500);
+    expect(resolveWaterGoalMl(rows, '2026-11-21')).toBe(2000);
+  });
+
+  it('replaces the row for the same date and kind without duplicating', async () => {
+    await saveWaterGoal(
+      { localDate: '2026-11-26', goalMl: 2000, singleDay: false },
+      userAId,
+      userAClient
+    );
+    await saveWaterGoal(
+      { localDate: '2026-11-26', goalMl: 2500, singleDay: false },
+      userAId,
+      userAClient
+    );
+
+    await expect(listWaterGoals(userAClient)).resolves.toEqual([
+      { localDate: '2026-11-26', goalMl: 2500, singleDay: false },
+    ]);
   });
 
   it('rejects goals outside 100..10000 ml', async () => {
     for (const invalid of [0, 99, 10001, -1]) {
-      const { error } = await goals(userAClient).insert({ goal_ml: invalid });
+      const { error } = await goals(userAClient).insert({
+        local_date: '2026-11-26',
+        goal_ml: invalid,
+        single_day: false,
+      });
       expect(error).not.toBeNull();
     }
 
     for (const valid of [100, 10000]) {
-      const { error: clearError } = await goals(userAClient)
-        .delete()
-        .gte('goal_ml', 100);
-      expect(clearError).toBeNull();
-      const { error } = await goals(userAClient).insert({ goal_ml: valid });
+      const { error } = await goals(userAClient).insert({
+        local_date: '2026-11-26',
+        goal_ml: valid,
+        single_day: false,
+      });
       expect(error).toBeNull();
     }
   });
 
-  it('prevents anonymous callers and User B from reading or changing User A goal', async () => {
+  it('requires a valid local_date on every goal row', async () => {
+    const { error: missingDateError } = await goals(userAClient).insert({
+      goal_ml: 2000,
+      single_day: false,
+    } as never);
+    expect(missingDateError).not.toBeNull();
+
+    for (const invalidDate of ['not-a-date', '2026-13-40', '']) {
+      const { error } = await goals(userAClient).insert({
+        local_date: invalidDate,
+        goal_ml: 2000,
+        single_day: false,
+      });
+      expect(error).not.toBeNull();
+    }
+  });
+
+  it('prevents anonymous callers and User B from reading or changing User A goals', async () => {
     const { error: insertError } = await goals(userAClient).insert({
+      local_date: '2026-11-20',
       goal_ml: 2200,
+      single_day: false,
     });
     expect(insertError).toBeNull();
 
-    const { data: ownerRow, error: ownerError } = await goals(userAClient)
-      .select('user_id, goal_ml')
-      .single();
+    const { data: ownerRows, error: ownerError } = await goals(userAClient)
+      .select('local_date, goal_ml, single_day')
+      .order('local_date');
     expect(ownerError).toBeNull();
-    expect(ownerRow).toEqual({ user_id: userAId, goal_ml: 2200 });
+    expect(ownerRows).toEqual([
+      { local_date: '2026-11-20', goal_ml: 2200, single_day: false },
+    ]);
 
     const { data: anonRead, error: anonReadError } =
       await goals(anonClient).select('*');
@@ -626,19 +692,21 @@ describe('water_goals table and RLS (ARK-33)', () => {
     expect(anonRead).toEqual([]);
 
     const { error: anonInsertError } = await goals(anonClient).insert({
+      local_date: '2026-11-21',
       goal_ml: 2000,
+      single_day: false,
     });
     expect(anonInsertError).not.toBeNull();
 
     const { data: anonUpdate } = await goals(anonClient)
       .update({ goal_ml: 3000 })
-      .eq('user_id', userAId)
+      .eq('local_date', '2026-11-20')
       .select();
     expect(anonUpdate).toEqual([]);
 
     const { data: anonDelete } = await goals(anonClient)
       .delete()
-      .eq('user_id', userAId)
+      .eq('local_date', '2026-11-20')
       .select();
     expect(anonDelete).toEqual([]);
 
@@ -650,70 +718,82 @@ describe('water_goals table and RLS (ARK-33)', () => {
 
     const { error: spoofInsertError } = await goals(userBClient).insert({
       user_id: userAId,
+      local_date: '2026-11-22',
       goal_ml: 3000,
+      single_day: false,
     });
     expect(spoofInsertError).not.toBeNull();
 
     const { error: spoofUpsertError } = await goals(userBClient).upsert(
-      { user_id: userAId, goal_ml: 3000 },
-      { onConflict: 'user_id' }
+      {
+        user_id: userAId,
+        local_date: '2026-11-22',
+        goal_ml: 3000,
+        single_day: false,
+      },
+      { onConflict: 'user_id,local_date,single_day' }
     );
     expect(spoofUpsertError).not.toBeNull();
 
     const { data: userBUpdate } = await goals(userBClient)
       .update({ goal_ml: 3000 })
-      .eq('user_id', userAId)
+      .eq('local_date', '2026-11-20')
       .select();
     expect(userBUpdate).toEqual([]);
 
     const { data: userBDelete } = await goals(userBClient)
       .delete()
-      .eq('user_id', userAId)
+      .eq('local_date', '2026-11-20')
       .select();
     expect(userBDelete).toEqual([]);
 
     const { data: stillOwner, error: stillOwnerError } = await goals(
       userAClient
     )
-      .select('user_id, goal_ml')
-      .single();
+      .select('local_date, goal_ml, single_day')
+      .order('local_date');
     expect(stillOwnerError).toBeNull();
-    expect(stillOwner).toEqual({ user_id: userAId, goal_ml: 2200 });
+    expect(stillOwner).toEqual([
+      { local_date: '2026-11-20', goal_ml: 2200, single_day: false },
+    ]);
 
     const { error: userBOwnGoalError } = await goals(userBClient).insert({
+      local_date: '2026-11-20',
       goal_ml: 3000,
+      single_day: true,
     });
     expect(userBOwnGoalError).toBeNull();
 
     const { data: userBOwn, error: userBOwnError } = await goals(userBClient)
-      .select('user_id, goal_ml')
-      .single();
+      .select('local_date, goal_ml, single_day')
+      .order('local_date');
     expect(userBOwnError).toBeNull();
-    expect(userBOwn).toEqual({ user_id: userBId, goal_ml: 3000 });
-
-    const { data: userAStill, error: userAStillError } =
-      await goals(userAClient).select('goal_ml');
-    expect(userAStillError).toBeNull();
-    expect(userAStill).toEqual([{ goal_ml: 2200 }]);
+    expect(userBOwn).toEqual([
+      { local_date: '2026-11-20', goal_ml: 3000, single_day: true },
+    ]);
   });
 
-  it('rejects reassignment of User A goal to User B', async () => {
+  it('rejects reassignment of User A goal rows to User B', async () => {
     const { error: insertError } = await goals(userAClient).insert({
+      local_date: '2026-11-20',
       goal_ml: 2200,
+      single_day: false,
     });
     expect(insertError).toBeNull();
 
     const { data: reassigned, error: reassignError } = await goals(userAClient)
       .update({ user_id: userBId })
-      .eq('user_id', userAId)
-      .select('user_id, goal_ml');
+      .eq('local_date', '2026-11-20')
+      .select('user_id, local_date, goal_ml');
     expect(reassignError !== null || reassigned?.length === 0).toBe(true);
 
-    const { data: ownerRow, error: ownerError } = await goals(userAClient)
-      .select('user_id, goal_ml')
-      .single();
+    const { data: ownerRows, error: ownerError } = await goals(userAClient)
+      .select('local_date, goal_ml, single_day')
+      .order('local_date');
     expect(ownerError).toBeNull();
-    expect(ownerRow).toEqual({ user_id: userAId, goal_ml: 2200 });
+    expect(ownerRows).toEqual([
+      { local_date: '2026-11-20', goal_ml: 2200, single_day: false },
+    ]);
 
     const { data: userBRead, error: userBReadError } = await goals(userBClient)
       .select('*')

@@ -5,7 +5,6 @@ import * as fc from 'fast-check';
 import { beforeEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { MAX_WATER_GOAL_ML, MIN_WATER_GOAL_ML } from '../model';
-import { WaterGoalMeter } from './WaterGoalMeter';
 import { WaterOrb } from './WaterOrb';
 
 const orbCss = readFileSync(
@@ -213,65 +212,4 @@ describe('WaterOrb', () => {
     expect(reduceBlock).toMatch(/transition:\s*none/);
   });
 
-  it('replaces the goal bar and keeps the goal form', () => {
-    render(
-      <WaterGoalMeter
-        consumedMl={500}
-        goalMl={2000}
-        saveError={false}
-        saving={false}
-        onSave={() => undefined}
-      />
-    );
-
-    const orb = screen.getByRole('progressbar', { name: 'Daily water goal' });
-    expect(orb).not.toHaveClass('water__bar');
-    expect(screen.getByText('0.5 L')).toBeInTheDocument();
-    expect(screen.getByText('of 2 L · 25%')).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('2');
-    expect(
-      screen.queryByRole('img', { name: 'Goal reached' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows the existing goal-reached mark beside a full orb', () => {
-    render(
-      <WaterGoalMeter
-        consumedMl={2000}
-        goalMl={2000}
-        saveError={false}
-        saving={false}
-        onSave={() => undefined}
-      />
-    );
-
-    expect(
-      screen.getByRole('img', { name: 'Goal reached' })
-    ).toBeInTheDocument();
-    expect(
-      fillOf(screen.getByRole('progressbar', { name: 'Daily water goal' }))
-    ).toHaveStyle({ width: '100%', height: '100%' });
-    expect(screen.getByText('2 L')).toBeInTheDocument();
-    expect(screen.getByText('of 2 L · 100%')).toBeInTheDocument();
-  });
-
-  it('does not mark the goal reached when the glass is capped at 99.9%', () => {
-    render(
-      <WaterGoalMeter
-        consumedMl={1999}
-        goalMl={2000}
-        saveError={false}
-        saving={false}
-        onSave={() => undefined}
-      />
-    );
-
-    expect(
-      screen.queryByRole('img', { name: 'Goal reached' })
-    ).not.toBeInTheDocument();
-    expect(
-      fillOf(screen.getByRole('progressbar', { name: 'Daily water goal' }))
-    ).toHaveStyle({ width: '99.9%', height: '99.9%' });
-    expect(screen.getByText('of 2 L · 99.9%')).toBeInTheDocument();
-  });
 });
