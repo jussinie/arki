@@ -116,15 +116,11 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Today' })
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText('2026-11-20', { exact: true })
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-20');
+    expect(await screen.findByText('0 L', { exact: true })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
     expect(
-      await screen.findByText('200 ml', { exact: true })
+      await screen.findByText('0.2 L', { exact: true })
     ).toBeInTheDocument();
   });
 
@@ -389,34 +385,32 @@ describe('day navigation', () => {
 
   it('loads and adds water for the picked day without changing today', async () => {
     render(<App localDate="2026-11-20" />);
-    await screen.findByText('0 ml', { exact: true });
+    await screen.findByText('0 L', { exact: true });
     fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    await screen.findByText('200 ml', { exact: true });
+    await screen.findByText('0.2 L', { exact: true });
 
     fireEvent.change(screen.getByLabelText('Choose date'), {
       target: { value: '2026-11-15' },
     });
     expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-15');
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(screen.getByText("Day's water total")).toBeInTheDocument();
+    expect(await screen.findByText('0 L', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("Day's water total")).not.toBeInTheDocument();
     expect(screen.queryByText("Today's water total")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^3 dl$/ }));
     expect(
-      await screen.findByText('300 ml', { exact: true })
+      await screen.findByText('0.3 L', { exact: true })
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
     expect(
-      await screen.findByText('200 ml', { exact: true })
+      await screen.findByText('0.2 L', { exact: true })
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Choose date'), {
       target: { value: '2026-11-15' },
     });
     expect(
-      await screen.findByText('300 ml', { exact: true })
+      await screen.findByText('0.3 L', { exact: true })
     ).toBeInTheDocument();
   });
 
@@ -431,9 +425,7 @@ describe('day navigation', () => {
       expect(
         screen.getByRole('heading', { level: 2, name: 'Today' })
       ).toBeInTheDocument();
-      expect(
-        screen.getByText('2026-11-20', { exact: true })
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText('Choose date')).toHaveValue('2026-11-20');
     }
   });
 
