@@ -3,37 +3,9 @@
   margin-top: 1.5rem;
 }
 
-.water h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.water__date {
-  display: block;
-  margin: 0.25rem 0 0;
-  color: var(--color-text-muted);
-}
-
-.water__total {
-  margin: 1rem 0;
-}
-
-.water__label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.9375rem;
-  font-weight: 600;
-}
-
-.water__amount {
-  font-size: 1.5rem;
-  line-height: 1.2;
-}
-
 .water__entries {
   list-style: none;
-  margin: 0 0 1rem;
+  margin: 1rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -58,18 +30,24 @@
 }
 
 .water__goal {
-  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
 }
 
 .water__goal-meter {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .water__goal-status {
-  flex: 0 0 auto;
+  position: absolute;
+  left: calc(100% + 0.5rem);
   width: 1.25rem;
   min-height: 1.25rem;
 }
@@ -88,7 +66,7 @@
   flex-wrap: wrap;
   align-items: end;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  margin-top: 0;
 }
 
 .water__goal-field {

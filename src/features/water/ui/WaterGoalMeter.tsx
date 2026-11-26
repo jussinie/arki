@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import {
   WATER_GOAL_RANGE_MESSAGE,
   formatWaterGoalLiters,
@@ -15,6 +15,7 @@ type WaterGoalMeterProps = {
   saveError: boolean;
   saving: boolean;
   onSave: (goalMl: number) => void;
+  children?: ReactNode;
 };
 
 type WaterGoalFormProps = {
@@ -86,6 +87,7 @@ export function WaterGoalMeter({
   saveError,
   saving,
   onSave,
+  children,
 }: WaterGoalMeterProps) {
   const savedLabel = formatWaterGoalLiters(goalMl);
   const reached = isWaterGoalReached(consumedMl, goalMl);
@@ -106,6 +108,7 @@ export function WaterGoalMeter({
           ) : null}
         </div>
       </div>
+      {children}
       <WaterGoalForm
         key={savedLabel}
         savedLabel={savedLabel}

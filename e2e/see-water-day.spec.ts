@@ -126,10 +126,6 @@ test.afterAll(async () => {
   await clearStoryDays();
 });
 
-function dayTotal(page: Page, amount: string) {
-  return page.locator('.water__total').getByText(amount, { exact: true });
-}
-
 async function signIn(page: Page) {
   await page.clock.setFixedTime(new Date(`${TODAY}T12:00:00Z`));
   await page.goto('/');
@@ -150,15 +146,18 @@ test.describe('See the day water entries', () => {
     await signIn(page);
     await page.getByLabel('Choose date').fill(STORY_DAY);
 
-    await expect(page.getByText(STORY_DAY, { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Choose date')).toHaveValue(STORY_DAY);
     const list = page.getByRole('list', { name: 'Water entries' });
     await expect(list.getByRole('listitem')).toHaveText(['200 ml', '500 ml']);
-    await expect(dayTotal(page, '700 ml')).toBeVisible();
+    const orb = page.getByRole('progressbar', { name: 'Daily water goal' });
+    await expect(orb).toHaveAttribute('aria-valuetext', /^700 ml of /);
+    await expect(page.getByText('0.7 L', { exact: true })).toBeVisible();
     await expect(page.getByText('999 ml', { exact: true })).toHaveCount(0);
     await expect(list).not.toContainText('999');
 
     await page.getByRole('button', { name: '1 dl', exact: true }).click();
-    await expect(dayTotal(page, '800 ml')).toBeVisible();
+    await expect(orb).toHaveAttribute('aria-valuetext', /^800 ml of /);
+    await expect(page.getByText('0.8 L', { exact: true })).toBeVisible();
     await expect(list.getByRole('listitem')).toHaveText([
       '200 ml',
       '500 ml',
@@ -176,7 +175,10 @@ test.describe('See the day water entries on a phone', () => {
 
     const list = page.getByRole('list', { name: 'Water entries' });
     await expect(list.getByRole('listitem')).toHaveText(['200 ml', '500 ml']);
-    await expect(dayTotal(page, '700 ml')).toBeVisible();
+    await expect(
+      page.getByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuetext', /^700 ml of /);
+    await expect(page.getByText('0.7 L', { exact: true })).toBeVisible();
 
     for (const item of await list.getByRole('listitem').all()) {
       const box = await item.boundingBox();

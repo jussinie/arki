@@ -14,10 +14,6 @@ async function expectPhoneControl(control: Locator) {
   ).toBe('16px');
 }
 
-function dayTotal(page: Page, amount: string) {
-  return page.locator('.water__total').getByText(amount, { exact: true });
-}
-
 async function expectNoOverflow(page: Page) {
   expect(
     await page.evaluate(
@@ -77,8 +73,8 @@ for (const phone of [false, true]) {
         const next = page.getByRole('button', { name: 'Next day' });
         await expect(picker).toHaveAttribute('type', 'date');
         await expect(picker).toHaveValue(TODAY);
-        await expect(page.getByText(TODAY, { exact: true })).toBeVisible();
-        await expect(dayTotal(page, '200 ml')).toBeVisible();
+        await expect(page.getByText(TODAY, { exact: true })).toHaveCount(0);
+        await expect(page.getByText('0.2 L', { exact: true })).toBeVisible();
 
         if (phone) {
           for (const control of [previous, next, picker]) {
@@ -101,14 +97,14 @@ for (const phone of [false, true]) {
         await next.click();
         await next.click();
         await expect(picker).toHaveValue('2026-11-21');
-        await expect(
-          page.getByText('2026-11-21', { exact: true })
-        ).toBeVisible();
+        await expect(page.getByText('2026-11-21', { exact: true })).toHaveCount(
+          0
+        );
 
         await picker.fill('2026-11-15');
         await expect(picker).toHaveValue('2026-11-15');
-        await expect(dayTotal(page, '350 ml')).toBeVisible();
-        await expect(page.getByText("Day's water total")).toBeVisible();
+        await expect(page.getByText('0.35 L', { exact: true })).toBeVisible();
+        await expect(page.getByText("Day's water total")).toHaveCount(0);
         expect(requestedDays).toContain('2026-11-15');
 
         await today.click();
@@ -116,7 +112,7 @@ for (const phone of [false, true]) {
         await expect(
           page.getByRole('heading', { level: 2, name: 'Today', exact: true })
         ).toBeVisible();
-        await expect(dayTotal(page, '200 ml')).toBeVisible();
+        await expect(page.getByText('0.2 L', { exact: true })).toBeVisible();
         await expect(today).toHaveCount(0);
         if (phone) await expectNoOverflow(page);
       });
