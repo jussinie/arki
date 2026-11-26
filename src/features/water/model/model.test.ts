@@ -285,8 +285,20 @@ describe('resolveWaterGoalMl (per-day goals)', () => {
       '2026-12-01',
       '2026-12-02',
     ];
-    const goalForOffset = (offset: number, values: number[]) =>
-      values[offset % values.length];
+    const dateAt = (offset: number): string => {
+      const day = days[offset];
+      if (day === undefined) {
+        throw new Error('Day offset out of the generated range');
+      }
+      return day;
+    };
+    const goalForOffset = (offset: number, values: number[]): number => {
+      const goalMl = values[offset % values.length];
+      if (goalMl === undefined) {
+        throw new Error('Goal values generator produced no value');
+      }
+      return goalMl;
+    };
 
     fc.assert(
       fc.property(
@@ -306,10 +318,10 @@ describe('resolveWaterGoalMl (per-day goals)', () => {
         (changeDays, exceptionDays, values, dayOffset) => {
           const rows: WaterGoal[] = [
             ...changeDays.map((offset) =>
-              change(days[offset], goalForOffset(offset, values))
+              change(dateAt(offset), goalForOffset(offset, values))
             ),
             ...exceptionDays.map((offset) =>
-              exception(days[offset], goalForOffset(offset, values))
+              exception(dateAt(offset), goalForOffset(offset, values))
             ),
           ];
 
@@ -320,10 +332,10 @@ describe('resolveWaterGoalMl (per-day goals)', () => {
               ? null
               : goalForOffset(Math.max(...inEffect), values);
 
-          expect(resolveWaterGoalMl(rows, days[dayOffset])).toBe(expected);
-          expect(resolveWaterGoalMl([...rows].reverse(), days[dayOffset])).toBe(
-            expected
-          );
+          expect(resolveWaterGoalMl(rows, dateAt(dayOffset))).toBe(expected);
+          expect(
+            resolveWaterGoalMl([...rows].reverse(), dateAt(dayOffset))
+          ).toBe(expected);
         }
       ),
       { numRuns: 300 }

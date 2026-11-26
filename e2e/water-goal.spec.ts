@@ -169,7 +169,10 @@ test.describe('Water goal in Settings', () => {
 
     await page.getByRole('link', { name: 'Water' }).click();
     await expect(goalOrb(page)).toHaveAttribute('aria-valuemax', '2500');
-    await expect(goalOrb(page)).toHaveAttribute('aria-valuetext', '0 ml of 2.5 L');
+    await expect(goalOrb(page)).toHaveAttribute(
+      'aria-valuetext',
+      '0 ml of 2.5 L'
+    );
     await expect(page.getByText('of 2.5 L · 0%')).toBeVisible();
 
     // The goal still applies on the next day.
@@ -256,9 +259,7 @@ test.describe('Water goal in Settings', () => {
     );
 
     await page.reload();
-    await expect(
-      page.getByRole('heading', { name: 'Settings' })
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await expect(page.getByLabel('Daily water goal (L)')).toHaveValue('');
   });
 });

@@ -2,11 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCurrentSession } from '../../session';
 import { supabase, type Database } from '../../../shared/supabase';
-import {
-  DEFAULT_WATER_GOAL_ML,
-  assertWaterGoalMl,
-  type WaterEntry,
-} from '../model';
+import { assertWaterGoalMl, type WaterEntry, type WaterGoal } from '../model';
 
 type WaterSupabaseClient = Pick<SupabaseClient<Database>, 'from'>;
 
@@ -103,9 +99,21 @@ export function useAddWater() {
   });
 }
 
-function waterGoalQueryKey(userId: string) {
-  return ['water-goal', userId] as const;
+type WaterGoalRow = Pick<
+  Database['public']['Tables']['water_goals']['Row'],
+  'local_date' | 'goal_ml' | 'single_day'
+>;
+
+function toWaterGoal(row: WaterGoalRow): WaterGoal {
+  return {
+    localDate: row.local_date,
+    goalMl: row.goal_ml,
+    singleDay: row.single_day,
+  };
 }
+
+const waterGoalsKey = (userId: string | null) =>
+  ['water-goals', userId] as const;
 
 async function requireUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getSession();
@@ -119,48 +127,68 @@ async function requireUserId(): Promise<string> {
   return userId;
 }
 
-export async function readWaterGoalMl(
+/** Replaces or adds one goal row, keeping the list ordered by local date. */
+function upsertWaterGoalRow(
+  rows: readonly WaterGoal[],
+  saved: WaterGoal
+): WaterGoal[] {
+  const withoutRow = rows.filter(
+    (row) =>
+      !(row.localDate === saved.localDate && row.singleDay === saved.singleDay)
+  );
+  return [...withoutRow, saved].sort((a, b) =>
+    a.localDate.localeCompare(b.localDate)
+  );
+}
+
+export async function listWaterGoals(
   client: WaterSupabaseClient = supabase
-): Promise<number> {
+): Promise<WaterGoal[]> {
   const { data, error } = await client
     .from('water_goals')
-    .select('goal_ml')
-    .maybeSingle();
+    .select('local_date, goal_ml, single_day')
+    .order('local_date', { ascending: true });
 
   if (error) {
     throw error;
   }
-  return data?.goal_ml ?? DEFAULT_WATER_GOAL_ML;
+
+  return (data ?? []).map(toWaterGoal);
 }
 
-export async function saveWaterGoalMl(
-  goalMl: number,
+export async function saveWaterGoal(
+  goal: WaterGoal,
   userId: string,
   client: WaterSupabaseClient = supabase
-): Promise<number> {
-  const validGoalMl = assertWaterGoalMl(goalMl);
+): Promise<WaterGoal> {
+  const goalMl = assertWaterGoalMl(goal.goalMl);
   const { data, error } = await client
     .from('water_goals')
     .upsert(
-      { user_id: userId, goal_ml: validGoalMl },
-      { onConflict: 'user_id' }
+      {
+        user_id: userId,
+        local_date: goal.localDate,
+        goal_ml: goalMl,
+        single_day: goal.singleDay,
+      },
+      { onConflict: 'user_id,local_date,single_day' }
     )
-    .select('goal_ml')
+    .select('local_date, goal_ml, single_day')
     .single();
 
   if (error) {
     throw error;
   }
-  return data.goal_ml;
+  return toWaterGoal(data);
 }
 
-export function useWaterGoal() {
+export function useWaterGoals() {
   const session = useCurrentSession();
   const userId = session.data?.userId ?? null;
   return useQuery({
-    queryKey: ['water-goal', userId],
+    queryKey: waterGoalsKey(userId),
     enabled: userId !== null,
-    queryFn: () => readWaterGoalMl(),
+    queryFn: () => listWaterGoals(),
   });
 }
 
@@ -168,32 +196,41 @@ export function useSetWaterGoal() {
   const queryClient = useQueryClient();
   return useMutation({
     scope: { id: 'water-goal' },
-    mutationFn: async (goalMl: number) => {
+    mutationFn: async (goal: WaterGoal) => {
       const userId = await requireUserId();
-      const savedGoalMl = await saveWaterGoalMl(goalMl, userId);
-      return { userId, goalMl: savedGoalMl };
+      const saved = await saveWaterGoal(goal, userId);
+      return { userId, saved };
     },
-    onMutate: async (goalMl) => {
+    onMutate: async (goal) => {
       const userId = await requireUserId();
-      const queryKey = waterGoalQueryKey(userId);
+      const queryKey = waterGoalsKey(userId);
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<number>(queryKey);
-      queryClient.setQueryData(queryKey, assertWaterGoalMl(goalMl));
+      const previous = queryClient.getQueryData<readonly WaterGoal[]>(queryKey);
+      queryClient.setQueryData<readonly WaterGoal[]>(queryKey, (rows = []) =>
+        upsertWaterGoalRow(rows, {
+          localDate: goal.localDate,
+          goalMl: assertWaterGoalMl(goal.goalMl),
+          singleDay: goal.singleDay,
+        })
+      );
       return { previous, userId };
     },
-    onError: (_error, _goalMl, context) => {
+    onError: (_error, _goal, context) => {
       if (!context) {
         return;
       }
-      const queryKey = waterGoalQueryKey(context.userId);
+      const queryKey = waterGoalsKey(context.userId);
       if (context.previous === undefined) {
         queryClient.removeQueries({ queryKey });
         return;
       }
       queryClient.setQueryData(queryKey, context.previous);
     },
-    onSuccess: ({ userId, goalMl }) => {
-      queryClient.setQueryData(waterGoalQueryKey(userId), goalMl);
+    onSuccess: ({ userId, saved }) => {
+      queryClient.setQueryData<readonly WaterGoal[]>(
+        waterGoalsKey(userId),
+        (rows = []) => upsertWaterGoalRow(rows, saved)
+      );
     },
   });
 }

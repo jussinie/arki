@@ -62,15 +62,21 @@ export type Database = {
       water_goals: {
         Row: {
           goal_ml: number;
+          local_date: string;
+          single_day: boolean;
           user_id: string;
         };
         ComputedFields: never;
         Insert: {
           goal_ml: number;
+          local_date: string;
+          single_day?: boolean;
           user_id?: string;
         };
         Update: {
           goal_ml?: number;
+          local_date?: string;
+          single_day?: boolean;
           user_id?: string;
         };
         Relationships: [];

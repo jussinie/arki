@@ -211,5 +211,4 @@ describe('WaterOrb', () => {
     expect(reduceBlock).toMatch(/animation:\s*none/);
     expect(reduceBlock).toMatch(/transition:\s*none/);
   });
-
 });

@@ -643,10 +643,14 @@ describe('water_goals per-day rows, resolution, and RLS (ARK-49)', () => {
       expect(error).not.toBeNull();
     }
 
-    for (const valid of [100, 10000]) {
+    const validGoals: Array<{ local_date: string; goal_ml: number }> = [
+      { local_date: '2026-11-26', goal_ml: 100 },
+      { local_date: '2026-11-27', goal_ml: 10000 },
+    ];
+    for (const valid of validGoals) {
       const { error } = await goals(userAClient).insert({
-        local_date: '2026-11-26',
-        goal_ml: valid,
+        local_date: valid.local_date,
+        goal_ml: valid.goal_ml,
         single_day: false,
       });
       expect(error).toBeNull();

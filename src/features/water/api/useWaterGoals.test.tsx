@@ -42,10 +42,7 @@ const db = vi.hoisted(() => {
           throw new Error(`Unexpected columns ${columns}`);
         }
         return {
-          order: async (
-            column: string,
-            options?: { ascending?: boolean }
-          ) => {
+          order: async (column: string, options?: { ascending?: boolean }) => {
             if (column !== 'local_date' || options?.ascending !== true) {
               throw new Error('Goal rows are read ordered by local_date asc');
             }
@@ -61,10 +58,7 @@ const db = vi.hoisted(() => {
           },
         };
       },
-      upsert: (
-        payload: GoalRow,
-        options?: { onConflict?: string }
-      ) => {
+      upsert: (payload: GoalRow, options?: { onConflict?: string }) => {
         upserts.push({ ...payload });
         if (options?.onConflict !== 'user_id,local_date,single_day') {
           throw new Error(
@@ -187,9 +181,24 @@ beforeEach(() => {
 describe('listWaterGoals', () => {
   it('returns the goal rows for the signed-in user ordered by local date', async () => {
     db.goals.push(
-      { user_id: 'user-1', local_date: '2026-12-01', goal_ml: 3000, single_day: false },
-      { user_id: 'user-1', local_date: '2026-11-19', goal_ml: 1500, single_day: true },
-      { user_id: 'user-1', local_date: '2026-11-26', goal_ml: 2500, single_day: false }
+      {
+        user_id: 'user-1',
+        local_date: '2026-12-01',
+        goal_ml: 3000,
+        single_day: false,
+      },
+      {
+        user_id: 'user-1',
+        local_date: '2026-11-19',
+        goal_ml: 1500,
+        single_day: true,
+      },
+      {
+        user_id: 'user-1',
+        local_date: '2026-11-26',
+        goal_ml: 2500,
+        single_day: false,
+      }
     );
 
     await expect(listWaterGoals()).resolves.toEqual([
@@ -214,9 +223,7 @@ describe('saveWaterGoal', () => {
   it('upserts a goal change point starting on the given date', async () => {
     const randomUUID = vi.spyOn(crypto, 'randomUUID');
 
-    await expect(
-      saveWaterGoal({ ...changePoint }, 'user-1')
-    ).resolves.toEqual({
+    await expect(saveWaterGoal({ ...changePoint }, 'user-1')).resolves.toEqual({
       localDate: '2026-11-26',
       goalMl: 2500,
       singleDay: false,
@@ -404,9 +411,9 @@ describe('useSetWaterGoal', () => {
     });
 
     await act(async () => {
-      await expect(
-        result.current.mutateAsync({ ...changePoint })
-      ).rejects.toBe(sessionError);
+      await expect(result.current.mutateAsync({ ...changePoint })).rejects.toBe(
+        sessionError
+      );
     });
     expect(db.from).not.toHaveBeenCalled();
   });
@@ -471,9 +478,7 @@ describe('useSetWaterGoal', () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(
-      queryClient.getQueryData(['water-goals', 'user-1'])
-    ).toBeUndefined();
+    expect(queryClient.getQueryData(['water-goals', 'user-1'])).toBeUndefined();
     expect(db.goals).toEqual([]);
   });
 

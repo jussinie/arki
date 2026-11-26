@@ -18,85 +18,95 @@ const db = vi.hoisted(() => {
   let selectError: Error | null = null;
   let upsertError: Error | null = null;
 
-  const from = vi.fn((_table: string) => ({
-    select: (_columns?: string) => ({
-      maybeSingle: async () => ({ data: null, error: null }),
-      eq: (column: 'local_date' | 'id', value: string) => {
-        const filtered = rows.filter((row) => row[column] === value);
-        return {
-          order: async () => {
-            if (selectError) {
-              return { data: null, error: selectError };
-            }
-            return {
-              data: filtered.map(({ id, amount_ml, local_date }) => ({
-                id,
-                amount_ml,
-                local_date,
-              })),
-              error: null,
-            };
-          },
-          single: async () => {
-            const found = filtered[0];
-            if (!found) {
+  const from = vi.fn((table: string) => {
+    if (table === 'water_goals') {
+      return {
+        select: (_columns?: string) => ({
+          order: async () => ({ data: [], error: null }),
+        }),
+      };
+    }
+
+    return {
+      select: (_columns?: string) => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+        eq: (column: 'local_date' | 'id', value: string) => {
+          const filtered = rows.filter((row) => row[column] === value);
+          return {
+            order: async () => {
+              if (selectError) {
+                return { data: null, error: selectError };
+              }
               return {
-                data: null,
-                error: new Error(`Row not found for ${column}=${value}`),
+                data: filtered.map(({ id, amount_ml, local_date }) => ({
+                  id,
+                  amount_ml,
+                  local_date,
+                })),
+                error: null,
               };
+            },
+            single: async () => {
+              const found = filtered[0];
+              if (!found) {
+                return {
+                  data: null,
+                  error: new Error(`Row not found for ${column}=${value}`),
+                };
+              }
+              return {
+                data: {
+                  id: found.id,
+                  amount_ml: found.amount_ml,
+                  local_date: found.local_date,
+                },
+                error: null,
+              };
+            },
+          };
+        },
+      }),
+      upsert: (
+        payload: { id: string; amount_ml: number; local_date: string },
+        options?: { ignoreDuplicates?: boolean }
+      ) => ({
+        select: () => ({
+          maybeSingle: async () => {
+            if (upsertError) {
+              return { data: null, error: upsertError };
             }
+            const existing = rows.find((row) => row.id === payload.id);
+            if (existing) {
+              return options?.ignoreDuplicates
+                ? { data: null, error: null }
+                : {
+                    data: {
+                      id: existing.id,
+                      amount_ml: existing.amount_ml,
+                      local_date: existing.local_date,
+                    },
+                    error: null,
+                  };
+            }
+            nextSeq += 1;
+            const stored: StoredRow = {
+              ...payload,
+              logged_at: String(nextSeq).padStart(8, '0'),
+            };
+            rows.push(stored);
             return {
               data: {
-                id: found.id,
-                amount_ml: found.amount_ml,
-                local_date: found.local_date,
+                id: stored.id,
+                amount_ml: stored.amount_ml,
+                local_date: stored.local_date,
               },
               error: null,
             };
           },
-        };
-      },
-    }),
-    upsert: (
-      payload: { id: string; amount_ml: number; local_date: string },
-      options?: { ignoreDuplicates?: boolean }
-    ) => ({
-      select: () => ({
-        maybeSingle: async () => {
-          if (upsertError) {
-            return { data: null, error: upsertError };
-          }
-          const existing = rows.find((row) => row.id === payload.id);
-          if (existing) {
-            return options?.ignoreDuplicates
-              ? { data: null, error: null }
-              : {
-                  data: {
-                    id: existing.id,
-                    amount_ml: existing.amount_ml,
-                    local_date: existing.local_date,
-                  },
-                  error: null,
-                };
-          }
-          nextSeq += 1;
-          const stored: StoredRow = {
-            ...payload,
-            logged_at: String(nextSeq).padStart(8, '0'),
-          };
-          rows.push(stored);
-          return {
-            data: {
-              id: stored.id,
-              amount_ml: stored.amount_ml,
-              local_date: stored.local_date,
-            },
-            error: null,
-          };
-        },
+        }),
       }),
-    }),
-  }));
+    };
+  });
 
   return {
     from,

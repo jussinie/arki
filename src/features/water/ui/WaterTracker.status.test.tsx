@@ -11,8 +11,7 @@ const waterDay = vi.hoisted(() => ({
 
 const waterGoals = vi.hoisted(() => ({
   data: [] as
-    | { localDate: string; goalMl: number; singleDay: boolean }[]
-    | undefined,
+    { localDate: string; goalMl: number; singleDay: boolean }[] | undefined,
   isPending: false,
   isError: false,
   isSuccess: true,

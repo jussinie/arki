@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -40,10 +40,7 @@ const db = vi.hoisted(() => {
           throw new Error(`Unexpected columns ${columns}`);
         }
         return {
-          order: async (
-            column: string,
-            options?: { ascending?: boolean }
-          ) => {
+          order: async (column: string, options?: { ascending?: boolean }) => {
             if (column !== 'local_date' || options?.ascending !== true) {
               throw new Error('Goal rows are read ordered by local_date asc');
             }
@@ -60,10 +57,7 @@ const db = vi.hoisted(() => {
           },
         };
       },
-      upsert: (
-        payload: GoalRow,
-        options?: { onConflict?: string }
-      ) => {
+      upsert: (payload: GoalRow, options?: { onConflict?: string }) => {
         upserts.push({ ...payload });
         if (options?.onConflict !== 'user_id,local_date,single_day') {
           throw new Error(
@@ -248,9 +242,7 @@ describe('WaterGoalSetting form state', () => {
     const release = db.holdReads();
     renderSetting();
 
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading water goal…'
-    );
+    expect(screen.getByRole('status')).toHaveTextContent('Loading water goal…');
     expect(screen.queryByLabelText('Goal date')).not.toBeInTheDocument();
 
     release();
@@ -292,6 +284,7 @@ describe('WaterGoalSetting saves', () => {
       target: { value: '2026-12-01' },
     });
     await saveGoal('3');
+    await waitFor(() => expect(db.upserts).toHaveLength(1));
 
     expect(db.upserts).toEqual([
       {
@@ -309,6 +302,7 @@ describe('WaterGoalSetting saves', () => {
       target: { value: '2026-11-19' },
     });
     await saveGoal('1');
+    await waitFor(() => expect(db.upserts).toHaveLength(1));
 
     expect(db.upserts).toEqual([
       {
@@ -392,7 +386,7 @@ describe('WaterGoalSetting validation and errors', () => {
   it('shows an error when saving fails and leaves the goal unsaved', async () => {
     renderSetting();
     await saveGoal('2.5');
-    expect(db.upserts).toHaveLength(1);
+    await waitFor(() => expect(db.upserts).toHaveLength(1));
 
     db.setWriteError(new Error('permission denied'));
     await saveGoal('3');
@@ -416,15 +410,21 @@ describe('WaterGoalSetting validation and errors', () => {
     await screen.findByLabelText('Daily water goal (L)');
 
     const releaseWrites = db.holdWrites();
-    const save = screen.getByRole('button', { name: 'Save goal' });
     fireEvent.change(screen.getByLabelText('Daily water goal (L)'), {
       target: { value: '2.5' },
     });
-    fireEvent.click(save);
+    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
 
-    expect(save).toBeDisabled();
+    // The optimistic update changes the saved label and remounts the form, so
+    // the button must be re-queried on every retry.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save goal' })).toBeDisabled()
+    );
     releaseWrites();
-    await screen.findByLabelText('Daily water goal (L)');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save goal' })).toBeEnabled()
+    );
+    await waitFor(() => expect(db.upserts).toHaveLength(1));
   });
 
   it('marks the goal field invalid and prefers the validation message over a save error', async () => {

@@ -4,6 +4,7 @@ import { SignInPage, useCurrentSession, useSignOut } from '../features/session';
 import { WaterTracker } from '../features/water';
 import { formatDisplayDate, getTodayLocalDate } from '../shared/date';
 import { DateNavigator } from './DateNavigator';
+import { SettingsPage } from './SettingsPage';
 import { TabBar } from './TabBar';
 import { WorkInProgressPage } from './WorkInProgressPage';
 import { SIGN_IN_PATH, getGuardRedirect, resolveAppTab } from './routing';
@@ -112,8 +113,10 @@ function SessionView({
           Could not sign out. Try again.
         </p>
       ) : null}
-      {tab === 'food' || tab === 'settings' ? (
-        <WorkInProgressPage title={tab === 'food' ? 'Food' : 'Settings'} />
+      {tab === 'food' ? (
+        <WorkInProgressPage title="Food" />
+      ) : tab === 'settings' ? (
+        <SettingsPage today={today} />
       ) : (
         <main className="today">
           <h2>

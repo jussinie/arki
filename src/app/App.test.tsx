@@ -41,7 +41,7 @@ const db = vi.hoisted(() => {
             goal_ml: number;
             single_day: boolean;
           },
-          options?: { onConflict?: string }
+          _options?: { onConflict?: string }
         ) => ({
           select: () => ({
             single: async () => ({ data: { ...payload }, error: null }),
@@ -585,11 +585,11 @@ describe('app navigation', () => {
     expect(
       await screen.findByRole('heading', { name: 'Settings' })
     ).toBeInTheDocument();
+    expect(screen.queryByText('Work in progress')).not.toBeInTheDocument();
+    expect(await screen.findByLabelText('Goal date')).toHaveValue('2026-11-20');
     expect(
-      screen.queryByText('Work in progress')
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Goal date')).toHaveValue('2026-11-20');
-    expect(screen.getByLabelText('Daily water goal (L)')).toBeInTheDocument();
+      await screen.findByLabelText('Daily water goal (L)')
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Save goal' })
     ).toBeInTheDocument();
@@ -693,11 +693,18 @@ describe('app navigation', () => {
     });
     fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
 
+    // A successful sign-in persists the session, and the Settings page adds a
+    // session observer whose stale refetch must see it, like real Supabase.
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+
     expect(
       await screen.findByRole('heading', { name: 'Settings' })
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText('Daily water goal (L)')
+      await screen.findByLabelText('Daily water goal (L)')
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe('/settings');
   });
