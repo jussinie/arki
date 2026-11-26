@@ -16,6 +16,19 @@ import {
 const today = '2026-11-20';
 
 describe('waterTotalMl', () => {
+  it('sums 200 ml and 500 ml on 2026-11-20 and ignores another local_date', () => {
+    expect(
+      waterTotalMl(
+        [
+          { id: 'a', amountMl: 200, localDate: today },
+          { id: 'b', amountMl: 500, localDate: today },
+          { id: 'c', amountMl: 999, localDate: '2026-11-21' },
+        ],
+        today
+      )
+    ).toBe(700);
+  });
+
   it('sums 250 ml logged on 2026-11-20', () => {
     expect(
       waterTotalMl([{ id: 'op-1', amountMl: 250, localDate: today }], today)

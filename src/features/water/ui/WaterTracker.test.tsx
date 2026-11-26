@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
@@ -28,8 +28,11 @@ const db = vi.hoisted(() => {
             if (selectError) {
               return { data: null, error: selectError };
             }
+            const sorted = [...filtered].sort((a, b) =>
+              a.logged_at.localeCompare(b.logged_at)
+            );
             return {
-              data: filtered.map(({ id, amount_ml, local_date }) => ({
+              data: sorted.map(({ id, amount_ml, local_date }) => ({
                 id,
                 amount_ml,
                 local_date,
@@ -100,6 +103,9 @@ const db = vi.hoisted(() => {
 
   return {
     from,
+    seed(nextRows: StoredRow[]) {
+      rows.push(...nextRows);
+    },
     setSelectError(error: Error | null) {
       selectError = error;
     },
@@ -237,6 +243,74 @@ describe('WaterTracker', () => {
       { id: 'op-dl-3', amountMl: 300, localDate: '2026-11-20' },
       { id: 'op-dl-4', amountMl: 400, localDate: '2026-11-20' },
     ]);
+  });
+
+  it('shows 200 ml and 500 ml entries and a 700 ml total for 2026-11-20', async () => {
+    db.seed([
+      {
+        id: 'entry-500',
+        amount_ml: 500,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-21T00:30:00.000Z',
+      },
+      {
+        id: 'entry-200',
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-19T23:30:00.000Z',
+      },
+      {
+        id: 'other-day',
+        amount_ml: 999,
+        local_date: '2026-11-21',
+        logged_at: '2026-11-20T12:00:00.000Z',
+      },
+    ]);
+    renderTracker();
+
+    const list = await screen.findByRole('list', { name: 'Water entries' });
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(/^200 ml$/);
+    expect(items[1]).toHaveTextContent(/^500 ml$/);
+    expect(screen.getByText('700 ml', { exact: true })).toBeInTheDocument();
+    expect(
+      screen.queryByText('999 ml', { exact: true })
+    ).not.toBeInTheDocument();
+    expect(list).not.toHaveTextContent('999');
+  });
+
+  it('keeps the open day list current after another entry is added', async () => {
+    db.seed([
+      {
+        id: 'entry-200',
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-19T23:30:00.000Z',
+      },
+      {
+        id: 'entry-500',
+        amount_ml: 500,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-21T00:30:00.000Z',
+      },
+    ]);
+    renderTracker(() => 'op-added');
+
+    expect(
+      await screen.findByText('700 ml', { exact: true })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
+
+    expect(
+      await screen.findByText('800 ml', { exact: true })
+    ).toBeInTheDocument();
+    const labels = within(screen.getByRole('list', { name: 'Water entries' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent?.replace(/\s+/g, ' ').trim());
+    expect(labels).toContain('100 ml');
+    expect(labels).toContain('200 ml');
+    expect(labels).toContain('500 ml');
   });
 
   it('shows an error alert instead of 0 ml when loading water entries fails', async () => {
