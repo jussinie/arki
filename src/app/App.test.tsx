@@ -652,4 +652,150 @@ describe('app navigation', () => {
     expect(screen.getByText('Work in progress')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/settings');
   });
+
+  it('sends an already signed-in user from a Food redirect to the Food stub', async () => {
+    window.history.replaceState(null, '', '/sign-in?redirect=%2Ffood');
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/food');
+    expect(window.location.search).toBe('');
+    expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
+  it('sends an already signed-in user from a Settings redirect to the Settings stub', async () => {
+    window.history.replaceState(null, '', '/sign-in?redirect=%2Fsettings');
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/settings');
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps the Food return path when sign-in fails so a retry can return to /food', async () => {
+    window.history.replaceState(null, '', '/food');
+    auth.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    auth.signInWithPassword
+      .mockResolvedValueOnce({
+        data: { user: null },
+        error: new Error('Invalid login credentials'),
+      })
+      .mockResolvedValueOnce({ data: { user }, error: null });
+    render(<App localDate="2026-11-20" />);
+
+    await screen.findByRole('heading', { level: 2, name: 'Sign in' });
+    expect(window.location.search).toBe('?redirect=%2Ffood');
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: user.email },
+    });
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'wrong-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+    });
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('?redirect=%2Ffood');
+    expect(
+      screen.queryByRole('heading', { name: 'Food' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Today' })
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Password'), {
+      target: { value: 'synthetic-password' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/food');
+    expect(window.location.search).toBe('');
+  });
+
+  it('does not treat lookalike paths as the Food or Settings tabs', async () => {
+    for (const path of ['/foodie', '/FOOD', '/food-log', '/settingsx']) {
+      window.history.replaceState(null, '', path);
+      const { unmount } = render(<App localDate="2026-11-20" />);
+
+      expect(
+        await screen.findByRole('heading', { name: 'Today' })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Food' })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Settings' })
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Water' })).toHaveAttribute(
+        'aria-current',
+        'page'
+      );
+      unmount();
+    }
+  });
+
+  it('renders the Food stub for nested /food paths without day navigation', async () => {
+    window.history.replaceState(null, '', '/food/log');
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Food' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Work in progress')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Food' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.queryByLabelText('Choose date')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Today' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('signs out from the Settings tab to a clean /sign-in without a tab redirect', async () => {
+    window.history.replaceState(null, '', '/settings');
+    let signedIn = true;
+    auth.getSession.mockImplementation(async () => ({
+      data: { session: signedIn ? { user } : null },
+      error: null,
+    }));
+    auth.signOut.mockImplementation(async () => {
+      signedIn = false;
+      return { error: null };
+    });
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Settings' })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/sign-in');
+    expect(window.location.search).toBe('');
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary' })
+    ).not.toBeInTheDocument();
+  });
 });
