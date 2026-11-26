@@ -56,6 +56,13 @@ describe('sanitizeReturnPath', () => {
     }
   });
 
+  it('rejects return paths that normalize to /sign-in via dot-segments', () => {
+    expect(sanitizeReturnPath('/../sign-in')).toBeNull();
+    expect(sanitizeReturnPath('/../../sign-in')).toBeNull();
+    expect(sanitizeReturnPath('/foo/../sign-in')).toBeNull();
+    expect(sanitizeReturnPath('/%2e%2e/sign-in')).toBeNull();
+  });
+
   it('never returns an external origin, protocol-relative URL, or /sign-in loop for arbitrary strings or dot-segment combinations', () => {
     const segmentArb = fc.constantFrom(
       '',
@@ -127,6 +134,9 @@ describe('resolvePostSignInPath', () => {
       TODAY_PATH
     );
     expect(resolvePostSignInPath('?redirect=%2Fsign-in')).toBe(TODAY_PATH);
+    expect(resolvePostSignInPath('?redirect=%2Ffoo%2F..%2Fsign-in')).toBe(
+      TODAY_PATH
+    );
   });
 });
 

@@ -28,6 +28,28 @@ test("a signed-in user can sign out from today's view", async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Today' })).toHaveCount(0);
 });
 
+test('sign-out from Settings goes to a clean /sign-in without a tab redirect', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page).toHaveURL('/settings');
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Sign out' }).click();
+
+  await expect(page).toHaveURL('/sign-in');
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(
+    0
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Settings', exact: true })
+  ).toHaveCount(0);
+});
+
 test.describe('Sign out on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

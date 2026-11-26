@@ -229,6 +229,46 @@ describe('useAddWater', () => {
 
     await waitFor(() => expect(result.current.today.data).toEqual([first]));
   });
+
+  it('keeps the original local_date when the same operation id is retried for another day', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.yesterday.isSuccess).toBe(true));
+    const first = {
+      id: 'op-retry-date',
+      amountMl: 250,
+      localDate: today,
+    };
+
+    await act(async () => {
+      await result.current.add.mutateAsync(first);
+      await result.current.add.mutateAsync({
+        id: first.id,
+        amountMl: 400,
+        localDate: yesterday,
+      });
+    });
+
+    await waitFor(() => expect(result.current.today.data).toEqual([first]));
+    expect(result.current.yesterday.data).toEqual([]);
+  });
+
+  it('records two different operation ids on the same local date', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    const first = { id: 'op-first', amountMl: 250, localDate: today };
+    const second = { id: 'op-second', amountMl: 100, localDate: today };
+
+    await act(async () => {
+      await result.current.add.mutateAsync(first);
+      await result.current.add.mutateAsync(second);
+    });
+
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([first, second])
+    );
+    expect(result.current.yesterday.data).toEqual([]);
+  });
 });
 
 describe('water Supabase API', () => {
@@ -331,6 +371,31 @@ describe('water Supabase API', () => {
           expect(await listWaterEntries(localDate)).toEqual([entry]);
           const otherDate = localDate === today ? yesterday : today;
           expect(await listWaterEntries(otherDate)).toEqual([]);
+        }
+      )
+    );
+  });
+
+  it('keeps the first local_date when the same operation id is retried on another day', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.uuid(),
+        fc.integer({ min: 1, max: 5000 }),
+        fc.integer({ min: 1, max: 5000 }),
+        async (id, amountMl, otherAmount) => {
+          db.reset();
+          const entry = { id, amountMl, localDate: today };
+          const first = await addWaterEntry(entry);
+          const retried = await addWaterEntry({
+            id,
+            amountMl: otherAmount,
+            localDate: yesterday,
+          });
+
+          expect(first).toEqual(entry);
+          expect(retried).toEqual(entry);
+          expect(await listWaterEntries(today)).toEqual([entry]);
+          expect(await listWaterEntries(yesterday)).toEqual([]);
         }
       )
     );

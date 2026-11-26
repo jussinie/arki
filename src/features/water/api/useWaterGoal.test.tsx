@@ -356,6 +356,21 @@ describe('useSetWaterGoal', () => {
     expect(db.upserts).toEqual([]);
   });
 
+  it('does not write an optimistic cache value when the goal is out of range', async () => {
+    const { queryClient, wrapper } = createWrapper();
+    const { result } = renderHook(() => useSetWaterGoal(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(99)).rejects.toThrow(
+        'Enter a goal between 0.1 and 10 L'
+      );
+    });
+
+    expect(queryClient.getQueryData(['water-goal', 'user-1'])).toBeUndefined();
+    expect(db.from).not.toHaveBeenCalled();
+    expect(db.upserts).toEqual([]);
+  });
+
   it('queues a second goal save until the first write finishes', async () => {
     const { queryClient, wrapper } = createWrapper();
     const { result } = renderHook(

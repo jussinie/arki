@@ -53,6 +53,32 @@ test.describe('Route guard for signed-out users (ARK-7)', () => {
     ).toBeVisible();
   });
 
+  test('encoded protocol-relative redirect targets fall back to / after sign-in', async ({
+    page,
+  }) => {
+    await page.goto('/sign-in?redirect=%2F%2Fevil.example%2Fphish');
+
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+
+    await page.getByLabel('Email').fill(TEST_EMAIL);
+    await page.getByLabel('Password').fill(TEST_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL('/');
+    await expect(
+      page.getByRole('heading', { name: 'Today', exact: true })
+    ).toBeVisible();
+  });
+
+  test('nested /sign-in/callback does not redirect-loop', async ({ page }) => {
+    await page.goto('/sign-in/callback');
+
+    await expect(page).toHaveURL('/sign-in');
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+    await expect(page).not.toHaveURL(/redirect=/);
+    await expect(page.getByRole('heading', { name: 'Today' })).toHaveCount(0);
+  });
+
   test('signed-in users visiting /sign-in are redirected to /', async ({
     page,
   }) => {

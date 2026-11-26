@@ -498,6 +498,99 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
       { id: sharedId, amountMl: 250, localDate: '2026-11-20' },
     ]);
   });
+
+  it('keeps the original local_date when the same operation id is retried for another day', async () => {
+    const opId = crypto.randomUUID();
+    userACreatedIds.push(opId);
+
+    const first = await addWaterEntry(
+      { id: opId, amountMl: 250, localDate: '2026-11-20' },
+      userAClient
+    );
+    expect(first).toEqual({
+      id: opId,
+      amountMl: 250,
+      localDate: '2026-11-20',
+    });
+
+    const retried = await addWaterEntry(
+      { id: opId, amountMl: 400, localDate: '2026-11-19' },
+      userAClient
+    );
+    expect(retried).toEqual({
+      id: opId,
+      amountMl: 250,
+      localDate: '2026-11-20',
+    });
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: opId, amountMl: 250, localDate: '2026-11-20' },
+    ]);
+    await expect(listWaterEntries('2026-11-19', userAClient)).resolves.toEqual(
+      []
+    );
+  });
+
+  it('rejects an insert that omits the client operation id', async () => {
+    const { error } = await userAClient.from('water_entries').insert({
+      amount_ml: 250,
+      local_date: '2026-11-20',
+    } as never);
+    expect(error).not.toBeNull();
+  });
+
+  it('prevents User A from inserting a water entry owned by User B', async () => {
+    const { data: userB, error: userBError } = await userBClient.auth.getUser();
+    expect(userBError).toBeNull();
+    expect(userB.user?.id).toEqual(expect.any(String));
+
+    const spoofId = crypto.randomUUID();
+    const { error: spoofError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: spoofId,
+        user_id: userB.user!.id,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(spoofError).not.toBeNull();
+
+    const { data: userBRead, error: userBReadError } = await userBClient
+      .from('water_entries')
+      .select('id')
+      .eq('id', spoofId);
+    expect(userBReadError).toBeNull();
+    expect(userBRead).toEqual([]);
+  });
+
+  it('lets the owner delete their own water entry', async () => {
+    const entryId = crypto.randomUUID();
+    userACreatedIds.push(entryId);
+
+    const { error: insertError } = await userAClient
+      .from('water_entries')
+      .insert({
+        id: entryId,
+        amount_ml: 250,
+        local_date: '2026-11-20',
+      });
+    expect(insertError).toBeNull();
+
+    const { data: deleted, error: deleteError } = await userAClient
+      .from('water_entries')
+      .delete()
+      .eq('id', entryId)
+      .select('id');
+    expect(deleteError).toBeNull();
+    expect(deleted).toEqual([{ id: entryId }]);
+
+    const { data: afterDelete, error: readError } = await userAClient
+      .from('water_entries')
+      .select('id')
+      .eq('id', entryId);
+    expect(readError).toBeNull();
+    expect(afterDelete).toEqual([]);
+  });
 });
 
 describe('water_goals table and RLS (ARK-33)', () => {
@@ -720,5 +813,33 @@ describe('water_goals table and RLS (ARK-33)', () => {
       .eq('user_id', userAId);
     expect(userBReadError).toBeNull();
     expect(userBRead).toEqual([]);
+  });
+
+  it('lets the owner update their goal_ml and rejects an out-of-range update', async () => {
+    const { error: insertError } = await goals(userAClient).insert({
+      goal_ml: 2200,
+    });
+    expect(insertError).toBeNull();
+
+    const { data: updated, error: updateError } = await goals(userAClient)
+      .update({ goal_ml: 1800 })
+      .eq('user_id', userAId)
+      .select('user_id, goal_ml');
+    expect(updateError).toBeNull();
+    expect(updated).toEqual([{ user_id: userAId, goal_ml: 1800 }]);
+
+    const { data: outOfRange, error: outOfRangeError } = await goals(
+      userAClient
+    )
+      .update({ goal_ml: 99 })
+      .eq('user_id', userAId)
+      .select('user_id, goal_ml');
+    expect(outOfRangeError !== null || outOfRange?.length === 0).toBe(true);
+
+    const { data: ownerRow, error: ownerError } = await goals(userAClient)
+      .select('user_id, goal_ml')
+      .single();
+    expect(ownerError).toBeNull();
+    expect(ownerRow).toEqual({ user_id: userAId, goal_ml: 1800 });
   });
 });
