@@ -1,6 +1,7 @@
 import {
   QUICK_ADD_WATER_DL,
   createClientOpId,
+  waterEntriesOnLocalDate,
   waterMlFromDl,
   waterTotalMl,
 } from '../model';
@@ -36,7 +37,8 @@ export function WaterTracker({
     });
   }
 
-  const totalMl = waterTotalMl(day.data ?? [], localDate);
+  const entries = waterEntriesOnLocalDate(day.data ?? [], localDate);
+  const totalMl = waterTotalMl(entries, localDate);
 
   const quickAddSection = (
     <>
@@ -62,6 +64,17 @@ export function WaterTracker({
     </>
   );
 
+  const entriesSection =
+    entries.length > 0 ? (
+      <ul className="water__entries" aria-label="Water entries">
+        {entries.map((entry) => (
+          <li key={entry.id} className="water__entry">
+            {entry.amountMl} ml
+          </li>
+        ))}
+      </ul>
+    ) : null;
+
   return (
     <section className="water" aria-label="Water">
       {day.isPending ? (
@@ -74,6 +87,7 @@ export function WaterTracker({
         <>
           <p role="status">Loading water goal…</p>
           {quickAddSection}
+          {entriesSection}
         </>
       ) : goal.isError || goal.data === undefined ? (
         <>
@@ -81,19 +95,23 @@ export function WaterTracker({
             Unable to load the water goal. Please reload.
           </p>
           {quickAddSection}
+          {entriesSection}
         </>
       ) : (
-        <WaterGoalMeter
-          consumedMl={totalMl}
-          goalMl={goal.data}
-          saveError={setGoal.isError}
-          saving={setGoal.isPending}
-          onSave={(goalMl) => {
-            setGoal.mutate(goalMl);
-          }}
-        >
-          {quickAddSection}
-        </WaterGoalMeter>
+        <>
+          <WaterGoalMeter
+            consumedMl={totalMl}
+            goalMl={goal.data}
+            saveError={setGoal.isError}
+            saving={setGoal.isPending}
+            onSave={(goalMl) => {
+              setGoal.mutate(goalMl);
+            }}
+          >
+            {quickAddSection}
+          </WaterGoalMeter>
+          {entriesSection}
+        </>
       )}
     </section>
   );

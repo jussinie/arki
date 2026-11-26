@@ -7,6 +7,7 @@ import {
   formatWaterGoalLiters,
   isWaterGoalReached,
   parseWaterGoalInput,
+  waterEntriesOnLocalDate,
   waterGoalFillPercent,
   waterGoalFillRatio,
   waterMlFromDl,
@@ -15,7 +16,60 @@ import {
 
 const today = '2026-11-20';
 
+describe('waterEntriesOnLocalDate', () => {
+  it('keeps 200 ml then 500 ml on 2026-11-20 and drops another local_date', () => {
+    const first = { id: 'early', amountMl: 200, localDate: today };
+    const second = { id: 'late', amountMl: 500, localDate: today };
+    const otherDay = { id: 'other', amountMl: 999, localDate: '2026-11-21' };
+
+    expect(waterEntriesOnLocalDate([first, otherDay, second], today)).toEqual([
+      first,
+      second,
+    ]);
+  });
+
+  it('preserves order for whichever local_date is requested', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            id: fc.uuid(),
+            amountMl: fc.integer({ min: 1, max: 5000 }),
+            localDate: fc.constantFrom('2026-11-19', today, '2026-11-21'),
+          })
+        ),
+        fc.constantFrom('2026-11-19', today, '2026-11-21'),
+        (entries, localDate) => {
+          const selected = waterEntriesOnLocalDate(entries, localDate);
+          expect(selected.every((entry) => entry.localDate === localDate)).toBe(
+            true
+          );
+          expect(selected).toEqual(
+            entries.filter((entry) => entry.localDate === localDate)
+          );
+          expect(waterTotalMl(entries, localDate)).toBe(
+            selected.reduce((total, entry) => total + entry.amountMl, 0)
+          );
+        }
+      )
+    );
+  });
+});
+
 describe('waterTotalMl', () => {
+  it('sums 200 ml and 500 ml on 2026-11-20 and ignores another local_date', () => {
+    expect(
+      waterTotalMl(
+        [
+          { id: 'a', amountMl: 200, localDate: today },
+          { id: 'b', amountMl: 500, localDate: today },
+          { id: 'c', amountMl: 999, localDate: '2026-11-21' },
+        ],
+        today
+      )
+    ).toBe(700);
+  });
+
   it('sums 250 ml logged on 2026-11-20', () => {
     expect(
       waterTotalMl([{ id: 'op-1', amountMl: 250, localDate: today }], today)

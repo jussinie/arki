@@ -210,6 +210,35 @@ describe('useAddWater', () => {
     randomUUID.mockRestore();
   });
 
+  it('reloads the local_date list after a write so entries stored outside the cache stay visible', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    expect(result.current.today.data).toEqual([]);
+
+    db.rows.push({
+      id: 'already-there',
+      amount_ml: 200,
+      local_date: today,
+      logged_at: '00000000',
+    });
+
+    await act(async () => {
+      await result.current.add.mutateAsync({
+        id: 'op-new',
+        amountMl: 500,
+        localDate: today,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([
+        { id: 'already-there', amountMl: 200, localDate: today },
+        { id: 'op-new', amountMl: 500, localDate: today },
+      ])
+    );
+    expect(result.current.yesterday.data).toEqual([]);
+  });
+
   it('stores one row when the same operation id is sent twice', async () => {
     const { result } = renderWater();
     await waitFor(() => expect(result.current.today.isSuccess).toBe(true));

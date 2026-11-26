@@ -489,6 +489,46 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
     }
   });
 
+  it('lists 200 ml and 500 ml for a local_date when logged_at falls on other UTC days', async () => {
+    const earlyId = crypto.randomUUID();
+    const lateId = crypto.randomUUID();
+    const otherLocalDateId = crypto.randomUUID();
+    userACreatedIds.push(earlyId, lateId, otherLocalDateId);
+
+    const { error } = await userAClient.from('water_entries').insert([
+      {
+        id: lateId,
+        amount_ml: 500,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-21T00:30:00Z',
+      },
+      {
+        id: earlyId,
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-19T23:30:00Z',
+      },
+      {
+        id: otherLocalDateId,
+        amount_ml: 999,
+        local_date: '2026-11-21',
+        logged_at: '2026-11-20T12:00:00Z',
+      },
+    ]);
+    expect(error).toBeNull();
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: earlyId, amountMl: 200, localDate: '2026-11-20' },
+      { id: lateId, amountMl: 500, localDate: '2026-11-20' },
+    ]);
+    await expect(listWaterEntries('2026-11-21', userAClient)).resolves.toEqual([
+      { id: otherLocalDateId, amountMl: 999, localDate: '2026-11-21' },
+    ]);
+    await expect(listWaterEntries('2026-11-20', userBClient)).resolves.toEqual(
+      []
+    );
+  });
+
   it('lists only the authenticated user entries for the requested local_date in logged_at order', async () => {
     const firstId = crypto.randomUUID();
     const secondId = crypto.randomUUID();
