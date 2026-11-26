@@ -30,7 +30,7 @@ test.describe('Bottom tab navigation (ARK-46)', () => {
     ).not.toHaveAttribute('aria-current');
   });
 
-  test('switches between the Food and Settings stubs and back to Water', async ({
+  test('switches between the Food stub and Settings and back to Water', async ({
     page,
   }) => {
     await page.goto('/');

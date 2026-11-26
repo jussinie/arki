@@ -7,10 +7,12 @@ import {
   formatWaterGoalLiters,
   isWaterGoalReached,
   parseWaterGoalInput,
+  resolveWaterGoalMl,
   waterGoalFillPercent,
   waterGoalFillRatio,
   waterMlFromDl,
   waterTotalMl,
+  type WaterGoal,
 } from './index';
 
 const today = '2026-11-20';
@@ -202,6 +204,141 @@ describe('water goal', () => {
           }
         }
       )
+    );
+  });
+});
+
+describe('resolveWaterGoalMl (per-day goals)', () => {
+  const change = (localDate: string, goalMl: number): WaterGoal => ({
+    localDate,
+    goalMl,
+    singleDay: false,
+  });
+  const exception = (localDate: string, goalMl: number): WaterGoal => ({
+    localDate,
+    goalMl,
+    singleDay: true,
+  });
+
+  it('returns null on a day with no goal rows', () => {
+    expect(resolveWaterGoalMl([], '2026-11-26')).toBeNull();
+  });
+
+  it('applies a goal starting on a day from that day onward until it changes', () => {
+    const goals = [change('2026-11-26', 2500)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-25')).toBeNull();
+    expect(resolveWaterGoalMl(goals, '2026-11-26')).toBe(2500);
+    expect(resolveWaterGoalMl(goals, '2026-11-27')).toBe(2500);
+    expect(resolveWaterGoalMl(goals, '2027-01-01')).toBe(2500);
+  });
+
+  it('uses the latest goal change on or before the day', () => {
+    const goals = [change('2026-11-26', 2500), change('2026-12-01', 3000)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-30')).toBe(2500);
+    expect(resolveWaterGoalMl(goals, '2026-12-01')).toBe(3000);
+    expect(resolveWaterGoalMl(goals, '2026-12-02')).toBe(3000);
+  });
+
+  it('preserves earlier days goals after a later change', () => {
+    const goals = [change('2026-11-01', 2000), change('2026-11-26', 2500)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-20')).toBe(2000);
+    expect(resolveWaterGoalMl(goals, '2026-11-26')).toBe(2500);
+  });
+
+  it('applies a single-day exception only on its own date', () => {
+    const goals = [change('2026-11-20', 2000), exception('2026-11-23', 3000)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-22')).toBe(2000);
+    expect(resolveWaterGoalMl(goals, '2026-11-23')).toBe(3000);
+    expect(resolveWaterGoalMl(goals, '2026-11-24')).toBe(2000);
+  });
+
+  it('lets a single-day exception share a date with a change point', () => {
+    const goals = [change('2026-11-20', 2000), exception('2026-11-20', 1500)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-20')).toBe(1500);
+    expect(resolveWaterGoalMl(goals, '2026-11-21')).toBe(2000);
+  });
+
+  it('ignores goal rows that start after the day', () => {
+    const goals = [change('2026-11-26', 2500), exception('2026-11-27', 3000)];
+
+    expect(resolveWaterGoalMl(goals, '2026-11-25')).toBeNull();
+  });
+
+  it('matches the day-keyed rule for any change points, exceptions, and day', () => {
+    const days = [
+      '2026-11-20',
+      '2026-11-21',
+      '2026-11-22',
+      '2026-11-23',
+      '2026-11-24',
+      '2026-11-25',
+      '2026-11-26',
+      '2026-11-27',
+      '2026-11-28',
+      '2026-11-29',
+      '2026-11-30',
+      '2026-12-01',
+      '2026-12-02',
+    ];
+    const dateAt = (offset: number): string => {
+      const day = days[offset];
+      if (day === undefined) {
+        throw new Error('Day offset out of the generated range');
+      }
+      return day;
+    };
+    const goalForOffset = (offset: number, values: number[]): number => {
+      const goalMl = values[offset % values.length];
+      if (goalMl === undefined) {
+        throw new Error('Goal values generator produced no value');
+      }
+      return goalMl;
+    };
+
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 0, max: 9 }), {
+          minLength: 0,
+          maxLength: 10,
+        }),
+        fc.uniqueArray(fc.integer({ min: 0, max: 9 }), {
+          minLength: 0,
+          maxLength: 10,
+        }),
+        fc.array(fc.integer({ min: 100, max: 10000 }), {
+          minLength: 1,
+          maxLength: 10,
+        }),
+        fc.integer({ min: 0, max: 12 }),
+        (changeDays, exceptionDays, values, dayOffset) => {
+          const rows: WaterGoal[] = [
+            ...changeDays.map((offset) =>
+              change(dateAt(offset), goalForOffset(offset, values))
+            ),
+            ...exceptionDays.map((offset) =>
+              exception(dateAt(offset), goalForOffset(offset, values))
+            ),
+          ];
+
+          const inEffect = changeDays.filter((offset) => offset <= dayOffset);
+          const expected = exceptionDays.includes(dayOffset)
+            ? goalForOffset(dayOffset, values)
+            : inEffect.length === 0
+              ? null
+              : goalForOffset(Math.max(...inEffect), values);
+
+          expect(resolveWaterGoalMl(rows, dateAt(dayOffset))).toBe(expected);
+          expect(
+            resolveWaterGoalMl([...rows].reverse(), dateAt(dayOffset))
+          ).toBe(expected);
+        }
+      ),
+      { numRuns: 300 }
     );
   });
 });

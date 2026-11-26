@@ -9,10 +9,12 @@ const waterDay = vi.hoisted(() => ({
   isError: false,
 }));
 
-const waterGoal = vi.hoisted(() => ({
-  data: 2000 as number | undefined,
+const waterGoals = vi.hoisted(() => ({
+  data: [] as
+    { localDate: string; goalMl: number; singleDay: boolean }[] | undefined,
   isPending: false,
   isError: false,
+  isSuccess: true,
 }));
 
 const addWater = vi.hoisted(() => ({
@@ -24,12 +26,7 @@ const addWater = vi.hoisted(() => ({
 vi.mock('../api', () => ({
   useWaterDay: () => waterDay,
   useAddWater: () => addWater,
-  useWaterGoal: () => waterGoal,
-  useSetWaterGoal: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-    isError: false,
-  }),
+  useWaterGoals: () => waterGoals,
 }));
 
 vi.mock('../../../shared/date', () => ({
@@ -46,9 +43,12 @@ describe('WaterTracker loading and missing-goal states', () => {
     waterDay.data = [];
     waterDay.isPending = false;
     waterDay.isError = false;
-    waterGoal.data = 2000;
-    waterGoal.isPending = false;
-    waterGoal.isError = false;
+    waterGoals.data = [
+      { localDate: '2026-11-20', goalMl: 2000, singleDay: false },
+    ];
+    waterGoals.isPending = false;
+    waterGoals.isError = false;
+    waterGoals.isSuccess = true;
   });
 
   it('shows Loading water and hides add buttons while entries are pending', () => {
@@ -67,8 +67,8 @@ describe('WaterTracker loading and missing-goal states', () => {
   });
 
   it('shows Loading water goal and still lets the user add water', () => {
-    waterGoal.isPending = true;
-    waterGoal.data = undefined;
+    waterGoals.isPending = true;
+    waterGoals.data = undefined;
     render(<WaterTracker localDate="2026-11-20" createOpId={() => 'op-1'} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading water goal…');
@@ -86,7 +86,8 @@ describe('WaterTracker loading and missing-goal states', () => {
   });
 
   it('treats a missing goal payload as a load failure even without an error flag', () => {
-    waterGoal.data = undefined;
+    waterGoals.data = undefined;
+    waterGoals.isSuccess = true;
     render(<WaterTracker localDate="2026-11-20" createOpId={() => 'op-1'} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(

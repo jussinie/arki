@@ -1,0 +1,8 @@
+.settings {
+  flex: 1;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+.settings h2 {
+  margin: 0;
+}

@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { WaterGoalMeter } from './WaterGoalMeter';
 import { WaterTracker } from './WaterTracker';
 
 type EntryRow = {
@@ -13,48 +12,53 @@ type EntryRow = {
   logged_at: string;
 };
 
-type GoalRow = { user_id: string; goal_ml: number };
+type GoalRow = {
+  user_id: string;
+  local_date: string;
+  goal_ml: number;
+  single_day: boolean;
+};
 
 const db = vi.hoisted(() => {
   const entries: EntryRow[] = [];
   const goals: GoalRow[] = [];
   let nextSeq = 0;
   let goalReadError: Error | null = null;
-  let goalWriteError: Error | null = null;
+  const goalUpserts: Array<GoalRow> = [];
 
   const from = vi.fn((table: string) => {
     if (table === 'water_goals') {
       return {
-        select: () => ({
-          maybeSingle: async () => {
-            if (goalReadError) {
-              return { data: null, error: goalReadError };
-            }
-            const row = goals[0];
-            return {
-              data: row ? { goal_ml: row.goal_ml } : null,
-              error: null,
-            };
-          },
-        }),
-        upsert: (payload: { user_id: string; goal_ml: number }) => ({
-          select: () => ({
-            single: async () => {
-              if (goalWriteError) {
-                return { data: null, error: goalWriteError };
+        select: (columns: string) => {
+          if (columns !== 'local_date, goal_ml, single_day') {
+            throw new Error(`Unexpected columns ${columns}`);
+          }
+          return {
+            order: async (
+              column: string,
+              options?: { ascending?: boolean }
+            ) => {
+              if (column !== 'local_date' || options?.ascending !== true) {
+                throw new Error('Goal rows are read ordered by local_date asc');
               }
-              const existing = goals.find(
-                (row) => row.user_id === payload.user_id
-              );
-              if (existing) {
-                existing.goal_ml = payload.goal_ml;
-              } else {
-                goals.push({ ...payload });
+              if (goalReadError) {
+                return { data: null, error: goalReadError };
               }
-              return { data: { goal_ml: payload.goal_ml }, error: null };
+              const rows = [...goals]
+                .sort((a, b) => a.local_date.localeCompare(b.local_date))
+                .map(({ local_date, goal_ml, single_day }) => ({
+                  local_date,
+                  goal_ml,
+                  single_day,
+                }));
+              return { data: rows, error: null };
             },
-          }),
-        }),
+          };
+        },
+        upsert: (payload: GoalRow) => {
+          goalUpserts.push({ ...payload });
+          throw new Error('The Water page never writes the water goal');
+        },
       };
     }
 
@@ -132,18 +136,17 @@ const db = vi.hoisted(() => {
   return {
     from,
     goals,
+    entries,
+    goalUpserts,
     setGoalReadError(error: Error | null) {
       goalReadError = error;
-    },
-    setGoalWriteError(error: Error | null) {
-      goalWriteError = error;
     },
     reset() {
       entries.length = 0;
       goals.length = 0;
       nextSeq = 0;
       goalReadError = null;
-      goalWriteError = null;
+      goalUpserts.length = 0;
       from.mockClear();
     },
   };
@@ -174,7 +177,6 @@ function renderTracker(localDate = '2026-11-20') {
       queries: { retry: false },
     },
   });
-  let nextId = 0;
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -182,28 +184,15 @@ function renderTracker(localDate = '2026-11-20') {
     );
   }
 
-  const view = render(
-    <WaterTracker
-      localDate={localDate}
-      createOpId={() => {
-        nextId += 1;
-        return `goal-op-${nextId}`;
-      }}
-    />,
-    { wrapper: Wrapper }
-  );
-
-  return view;
+  return render(<WaterTracker localDate={localDate} />, { wrapper: Wrapper });
 }
 
-async function saveGoal(liters: string) {
-  const input = await screen.findByLabelText('Daily water goal (L)');
-  fireEvent.change(input, { target: { value: liters } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-  const goalMl = Math.round(Number(liters.replace(',', '.')) * 1000);
-  await screen.findByRole('progressbar', {
-    name: 'Daily water goal',
-    value: { max: goalMl },
+function seedGoal(localDate: string, goalMl: number, singleDay: boolean) {
+  db.goals.push({
+    user_id: 'synthetic-user',
+    local_date: localDate,
+    goal_ml: goalMl,
+    single_day: singleDay,
   });
 }
 
@@ -211,148 +200,133 @@ beforeEach(() => {
   db.reset();
 });
 
-describe('WaterTracker daily goal', () => {
-  it('shows a 2 L goal and an empty bar before the user sets one', async () => {
-    renderTracker();
+describe('WaterTracker daily goal display', () => {
+  it('shows the goal in effect on the day without any editing UI', async () => {
+    seedGoal('2026-11-19', 2500, false);
+    renderTracker('2026-11-20');
 
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '2'
-    );
-    const bar = screen.getByRole('progressbar', { name: 'Daily water goal' });
-    expect(bar).toHaveAttribute('aria-valuemin', '0');
-    expect(bar).toHaveAttribute('aria-valuemax', '2000');
-    expect(bar).toHaveAttribute('aria-valuenow', '0');
-    expect(bar).toHaveAttribute('aria-valuetext', '0 ml of 2 L');
-    expect(bar.querySelector('.water__bar-fill')).toHaveStyle({ width: '0%' });
+    const orb = await screen.findByRole('progressbar', {
+      name: 'Daily water goal',
+    });
+    expect(orb).toHaveAttribute('aria-valuemin', '0');
+    expect(orb).toHaveAttribute('aria-valuemax', '2500');
+    expect(orb).toHaveAttribute('aria-valuenow', '0');
+    expect(orb).toHaveAttribute('aria-valuetext', '0 ml of 2.5 L');
+    expect(screen.getByText('of 2.5 L · 0%')).toBeInTheDocument();
     expect(
-      screen.queryByRole('img', { name: 'Goal reached' })
+      screen.queryByLabelText('Daily water goal (L)')
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Save goal' })
+    ).not.toBeInTheDocument();
+    expect(db.goalUpserts).toEqual([]);
+  });
+
+  it('keeps every day on the goal in effect on that day', async () => {
+    seedGoal('2026-11-19', 2000, false);
+    seedGoal('2026-11-21', 3000, false);
+    const { rerender } = renderTracker('2026-11-20');
+
+    expect(
+      await screen.findByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '2000');
+
+    rerender(<WaterTracker localDate="2026-11-21" />);
+    expect(
+      await screen.findByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '3000');
+
+    rerender(<WaterTracker localDate="2026-11-22" />);
+    expect(
+      await screen.findByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '3000');
+
+    rerender(<WaterTracker localDate="2026-11-18" />);
+    expect(
+      await screen.findByText('No water goal set. Set one in Settings.')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Daily water goal' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('applies a single-day exception only on its own date', async () => {
+    seedGoal('2026-11-19', 2000, false);
+    seedGoal('2026-11-20', 1500, true);
+    const { rerender } = renderTracker('2026-11-20');
+
+    expect(
+      await screen.findByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '1500');
+
+    rerender(<WaterTracker localDate="2026-11-21" />);
+    expect(
+      await screen.findByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuemax', '2000');
+  });
+
+  it('shows a no-goal note on a day without a goal and still tracks water', async () => {
+    renderTracker('2026-11-20');
+
+    expect(
+      await screen.findByText('No water goal set. Set one in Settings.')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Daily water goal' })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('0 ml', { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^1 dl$/ })).toBeEnabled();
     expect(db.goals).toEqual([]);
   });
 
-  it('fills the bar up to the goal, then keeps tracking water past it', async () => {
-    renderTracker();
-    await saveGoal('0.2');
-
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '0.2'
-    );
-    await screen.findByRole('progressbar', {
-      name: 'Daily water goal',
-      value: { max: 200, now: 0 },
+  it('marks the goal reached beside a full orb', async () => {
+    seedGoal('2026-11-20', 2000, false);
+    db.entries.push({
+      id: 'entry-1',
+      amount_ml: 2000,
+      local_date: '2026-11-20',
+      logged_at: '1',
     });
+    renderTracker('2026-11-20');
 
-    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
     expect(
-      await screen.findByText('200 ml', { exact: true })
+      await screen.findByRole('img', { name: 'Goal reached' })
     ).toBeInTheDocument();
-    const reached = screen.getByRole('progressbar', {
-      name: 'Daily water goal',
-    });
-    expect(reached).toHaveAttribute('aria-valuemax', '200');
-    expect(reached).toHaveAttribute('aria-valuenow', '200');
-    expect(reached.querySelector('.water__bar-fill')).toHaveStyle({
+    const orb = screen.getByRole('progressbar', { name: 'Daily water goal' });
+    expect(orb).toHaveAttribute('aria-valuetext', '2000 ml of 2 L');
+    expect(orb.querySelector('.water__bar-fill')).toHaveStyle({
       width: '100%',
+      height: '100%',
     });
-    expect(
-      screen.getByRole('img', { name: 'Goal reached' })
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
-    expect(
-      await screen.findByText('300 ml', { exact: true })
-    ).toBeInTheDocument();
-    const over = screen.getByRole('progressbar', { name: 'Daily water goal' });
-    expect(over).toHaveAttribute('aria-valuemax', '200');
-    expect(over).toHaveAttribute('aria-valuenow', '200');
-    expect(over).toHaveAttribute('aria-valuetext', '300 ml of 0.2 L');
-    expect(over.querySelector('.water__bar-fill')).toHaveStyle({
-      width: '100%',
-    });
-    expect(
-      screen.getByRole('img', { name: 'Goal reached' })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('0.2');
-    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 200 }]);
   });
 
-  it('keeps the same goal on another day and fills that day on its own', async () => {
-    const { rerender } = renderTracker('2026-11-20');
-    await saveGoal('1');
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '1'
-    );
+  it('does not mark the goal reached while the orb is capped at 99.9%', async () => {
+    seedGoal('2026-11-20', 2000, false);
+    db.entries.push({
+      id: 'entry-1',
+      amount_ml: 1999,
+      local_date: '2026-11-20',
+      logged_at: '1',
+    });
+    renderTracker('2026-11-20');
 
-    fireEvent.click(screen.getByRole('button', { name: /^4 dl$/ }));
-    expect(
-      await screen.findByText('400 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(
-      screen
-        .getByRole('progressbar', { name: 'Daily water goal' })
-        .querySelector('.water__bar-fill')
-    ).toHaveStyle({ width: '40%' });
+    const orb = await screen.findByRole('progressbar', {
+      name: 'Daily water goal',
+    });
+    expect(orb).toHaveAttribute('aria-valuetext', '1999 ml of 2 L');
+    expect(orb.querySelector('.water__bar-fill')).toHaveStyle({
+      width: '99.9%',
+      height: '99.9%',
+    });
+    expect(screen.getByText('of 2 L · 99.9%')).toBeInTheDocument();
     expect(
       screen.queryByRole('img', { name: 'Goal reached' })
     ).not.toBeInTheDocument();
-
-    rerender(<WaterTracker localDate="2026-11-19" />);
-    expect(
-      await screen.findByText('0 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
-    expect(
-      screen.getByRole('progressbar', { name: 'Daily water goal' })
-    ).toHaveAttribute('aria-valuemax', '1000');
-    expect(
-      screen.queryByRole('img', { name: 'Goal reached' })
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
-    expect(
-      await screen.findByText('100 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
-
-    rerender(<WaterTracker localDate="2026-11-20" />);
-    expect(
-      await screen.findByText('400 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('1');
-    expect(
-      screen.queryByRole('img', { name: 'Goal reached' })
-    ).not.toBeInTheDocument();
-    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 1000 }]);
-  });
-
-  it('rejects a goal outside 0.1 L to 10 L and keeps the saved goal', async () => {
-    renderTracker();
-    await saveGoal('2.5');
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '2.5'
-    );
-    expect(
-      screen.getByRole('progressbar', { name: 'Daily water goal' })
-    ).toHaveAttribute('aria-valuemax', '2500');
-
-    for (const invalid of ['', '0', '0.09', '10.1', 'abc']) {
-      const input = screen.getByLabelText('Daily water goal (L)');
-      fireEvent.change(input, { target: { value: invalid } });
-      fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-      expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Enter a goal between 0.1 and 10 L'
-      );
-      expect(
-        screen.getByRole('progressbar', { name: 'Daily water goal' })
-      ).toHaveAttribute('aria-valuemax', '2500');
-    }
-
-    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2500 }]);
   });
 
   it('shows a goal error and still lets the user add water when the goal cannot be loaded', async () => {
     db.setGoalReadError(new Error('permission denied'));
-    renderTracker();
+    renderTracker('2026-11-20');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Unable to load the water goal. Please reload.'
@@ -362,154 +336,7 @@ describe('WaterTracker daily goal', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^1 dl$/ })).toBeEnabled();
     expect(
-      screen.queryByLabelText('Daily water goal (L)')
+      screen.queryByRole('progressbar', { name: 'Daily water goal' })
     ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /^2 dl$/ }));
-    expect(
-      await screen.findByText('200 ml', { exact: true })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Unable to load the water goal. Please reload.'
-    );
-  });
-
-  it('shows an error when saving the goal fails and leaves the previous goal', async () => {
-    renderTracker();
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '2'
-    );
-    db.setGoalWriteError(new Error('permission denied'));
-
-    const input = screen.getByLabelText('Daily water goal (L)');
-    fireEvent.change(input, { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not save the water goal. Try again.'
-    );
-    expect(
-      screen.getByRole('progressbar', { name: 'Daily water goal' })
-    ).toHaveAttribute('aria-valuemax', '2000');
-    expect(db.goals).toEqual([]);
-  });
-
-  it('saves a comma decimal as litres and rewrites the draft in dotted form', async () => {
-    renderTracker();
-
-    const input = await screen.findByLabelText('Daily water goal (L)');
-    fireEvent.change(input, { target: { value: '2,5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '2.5'
-    );
-    expect(
-      screen.getByRole('progressbar', { name: 'Daily water goal' })
-    ).toHaveAttribute('aria-valuemax', '2500');
-    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2500 }]);
-  });
-
-  it('rewrites a leading-zero whole-litre draft after a successful save', async () => {
-    renderTracker();
-
-    const input = await screen.findByLabelText('Daily water goal (L)');
-    fireEvent.change(input, { target: { value: '02' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-
-    expect(await screen.findByLabelText('Daily water goal (L)')).toHaveValue(
-      '2'
-    );
-    expect(db.goals).toEqual([{ user_id: 'synthetic-user', goal_ml: 2000 }]);
-  });
-
-  it('disables Save goal while a save is in flight', () => {
-    render(
-      <WaterGoalMeter
-        consumedMl={0}
-        goalMl={2000}
-        saveError={false}
-        saving
-        onSave={() => undefined}
-      />
-    );
-
-    expect(screen.getByRole('button', { name: 'Save goal' })).toBeDisabled();
-  });
-
-  it('marks the goal field invalid and prefers the validation message over a save error', () => {
-    const onSave = vi.fn();
-    render(
-      <WaterGoalMeter
-        consumedMl={0}
-        goalMl={2000}
-        saveError
-        saving={false}
-        onSave={onSave}
-      />
-    );
-
-    const input = screen.getByLabelText('Daily water goal (L)');
-    expect(input).toHaveAttribute('aria-invalid', 'false');
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Could not save the water goal. Try again.'
-    );
-    expect(input).toHaveAttribute('aria-describedby', 'water-goal-error');
-
-    fireEvent.change(input, { target: { value: 'abc' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-
-    expect(input).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a goal between 0.1 and 10 L'
-    );
-    expect(
-      screen.queryByText('Could not save the water goal. Try again.')
-    ).not.toBeInTheDocument();
-    expect(onSave).not.toHaveBeenCalled();
-  });
-
-  it('resets draft and validation error when goalMl changes and returns to a previous value', () => {
-    const onSave = vi.fn();
-    const { rerender } = render(
-      <WaterGoalMeter
-        consumedMl={0}
-        goalMl={2000}
-        saveError={false}
-        saving={false}
-        onSave={onSave}
-      />
-    );
-
-    const input = screen.getByLabelText('Daily water goal (L)');
-    fireEvent.change(input, { target: { value: 'abc' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Enter a goal between 0.1 and 10 L'
-    );
-
-    rerender(
-      <WaterGoalMeter
-        consumedMl={0}
-        goalMl={3000}
-        saveError={false}
-        saving={false}
-        onSave={onSave}
-      />
-    );
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('3');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-
-    rerender(
-      <WaterGoalMeter
-        consumedMl={0}
-        goalMl={2000}
-        saveError={false}
-        saving={false}
-        onSave={onSave}
-      />
-    );
-    expect(screen.getByLabelText('Daily water goal (L)')).toHaveValue('2');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
