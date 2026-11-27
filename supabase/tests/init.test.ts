@@ -529,6 +529,36 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
     );
   });
 
+  it('lists two 200 ml rows on the same local_date as separate entries', async () => {
+    const firstId = crypto.randomUUID();
+    const secondId = crypto.randomUUID();
+    userACreatedIds.push(firstId, secondId);
+
+    const { error } = await userAClient.from('water_entries').insert([
+      {
+        id: firstId,
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T08:00:00Z',
+      },
+      {
+        id: secondId,
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T09:00:00Z',
+      },
+    ]);
+    expect(error).toBeNull();
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: firstId, amountMl: 200, localDate: '2026-11-20' },
+      { id: secondId, amountMl: 200, localDate: '2026-11-20' },
+    ]);
+    await expect(listWaterEntries('2026-11-20', userBClient)).resolves.toEqual(
+      []
+    );
+  });
+
   it('lists only the authenticated user entries for the requested local_date in logged_at order', async () => {
     const firstId = crypto.randomUUID();
     const secondId = crypto.randomUUID();

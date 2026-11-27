@@ -75,6 +75,11 @@ for (const phone of [false, true]) {
         await expect(picker).toHaveValue(TODAY);
         await expect(page.getByText(TODAY, { exact: true })).toHaveCount(0);
         await expect(page.getByText('0.2 L', { exact: true })).toBeVisible();
+        await expect(
+          page
+            .getByRole('list', { name: 'Water entries' })
+            .getByRole('listitem')
+        ).toHaveText(['200 ml']);
 
         if (phone) {
           for (const control of [previous, next, picker]) {
@@ -104,6 +109,12 @@ for (const phone of [false, true]) {
         await picker.fill('2026-11-15');
         await expect(picker).toHaveValue('2026-11-15');
         await expect(page.getByText('0.35 L', { exact: true })).toBeVisible();
+        await expect(
+          page
+            .getByRole('list', { name: 'Water entries' })
+            .getByRole('listitem')
+        ).toHaveText(['350 ml']);
+        await expect(page.getByText('200 ml', { exact: true })).toHaveCount(0);
         await expect(page.getByText("Day's water total")).toHaveCount(0);
         expect(requestedDays).toContain('2026-11-15');
 
