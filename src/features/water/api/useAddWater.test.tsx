@@ -239,6 +239,81 @@ describe('useAddWater', () => {
     expect(result.current.yesterday.data).toEqual([]);
   });
 
+  it('does not reload another local_date after a write', async () => {
+    db.rows.push({
+      id: 'yesterday-row',
+      amount_ml: 300,
+      local_date: yesterday,
+      logged_at: '00000000',
+    });
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    await waitFor(() =>
+      expect(result.current.yesterday.data).toEqual([
+        { id: 'yesterday-row', amountMl: 300, localDate: yesterday },
+      ])
+    );
+
+    await act(async () => {
+      await result.current.add.mutateAsync({
+        id: 'op-today',
+        amountMl: 250,
+        localDate: today,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([
+        { id: 'op-today', amountMl: 250, localDate: today },
+      ])
+    );
+    expect(result.current.yesterday.data).toEqual([
+      { id: 'yesterday-row', amountMl: 300, localDate: yesterday },
+    ]);
+  });
+
+  it('reloads the original local_date when the same operation id is retried on another day', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.yesterday.isSuccess).toBe(true));
+
+    await act(async () => {
+      await result.current.add.mutateAsync({
+        id: 'op-retry',
+        amountMl: 250,
+        localDate: today,
+      });
+    });
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([
+        { id: 'op-retry', amountMl: 250, localDate: today },
+      ])
+    );
+
+    db.rows.push({
+      id: 'other-tab',
+      amount_ml: 100,
+      local_date: today,
+      logged_at: '00000002',
+    });
+
+    await act(async () => {
+      await result.current.add.mutateAsync({
+        id: 'op-retry',
+        amountMl: 400,
+        localDate: yesterday,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([
+        { id: 'op-retry', amountMl: 250, localDate: today },
+        { id: 'other-tab', amountMl: 100, localDate: today },
+      ])
+    );
+    expect(result.current.yesterday.data).toEqual([]);
+  });
+
   it('stores one row when the same operation id is sent twice', async () => {
     const { result } = renderWater();
     await waitFor(() => expect(result.current.today.isSuccess).toBe(true));

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { WaterTracker } from './WaterTracker';
@@ -85,6 +85,65 @@ describe('WaterTracker loading and missing-goal states', () => {
       amountMl: 200,
       localDate: '2026-11-20',
     });
+  });
+
+  it('still lists water entries while the goal is loading', () => {
+    waterGoal.isPending = true;
+    waterGoal.data = undefined;
+    waterDay.data = [
+      { id: 'entry-200', amountMl: 200, localDate: '2026-11-20' },
+      { id: 'entry-500', amountMl: 500, localDate: '2026-11-20' },
+    ];
+    render(<WaterTracker localDate="2026-11-20" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading water goal…');
+    expect(
+      within(screen.getByRole('list', { name: 'Water entries' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['200 ml', '500 ml']);
+  });
+
+  it('still lists water entries when the water goal fails to load', () => {
+    waterGoal.isError = true;
+    waterGoal.data = undefined;
+    waterDay.data = [
+      { id: 'entry-200', amountMl: 200, localDate: '2026-11-20' },
+      { id: 'entry-500', amountMl: 500, localDate: '2026-11-20' },
+    ];
+    render(<WaterTracker localDate="2026-11-20" createOpId={() => 'op-1'} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Unable to load the water goal. Please reload.'
+    );
+    expect(
+      within(screen.getByRole('list', { name: 'Water entries' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['200 ml', '500 ml']);
+
+    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
+    expect(addWater.mutate).toHaveBeenCalledExactlyOnceWith({
+      id: 'op-1',
+      amountMl: 100,
+      localDate: '2026-11-20',
+    });
+  });
+
+  it('hides stale entries when reloading the day fails', () => {
+    waterDay.isError = true;
+    waterDay.data = [{ id: 'stale', amountMl: 200, localDate: '2026-11-20' }];
+    render(<WaterTracker localDate="2026-11-20" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Unable to load water entries. Please reload.'
+    );
+    expect(
+      screen.queryByRole('list', { name: 'Water entries' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('200 ml', { exact: true })
+    ).not.toBeInTheDocument();
   });
 
   it('treats a missing goal payload as a load failure even without an error flag', () => {

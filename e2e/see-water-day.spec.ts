@@ -164,6 +164,23 @@ test.describe('See the day water entries', () => {
       '100 ml',
     ]);
   });
+
+  test('switching days replaces the entry list and total', async ({ page }) => {
+    await signIn(page);
+    await page.getByLabel('Choose date').fill(STORY_DAY);
+    const list = page.getByRole('list', { name: 'Water entries' });
+    await expect(list.getByRole('listitem')).toHaveText(['200 ml', '500 ml']);
+
+    await page.getByLabel('Choose date').fill(OTHER_DAY);
+    await expect(page.getByLabel('Choose date')).toHaveValue(OTHER_DAY);
+    const otherList = page.getByRole('list', { name: 'Water entries' });
+    await expect(otherList.getByRole('listitem')).toHaveText(['999 ml']);
+    await expect(
+      page.getByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuetext', /^999 ml of /);
+    await expect(page.getByText('200 ml', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('500 ml', { exact: true })).toHaveCount(0);
+  });
 });
 
 test.describe('See the day water entries on a phone', () => {
