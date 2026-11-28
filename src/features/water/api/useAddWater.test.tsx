@@ -19,7 +19,15 @@ type StoredRow = {
 
 const db = vi.hoisted(() => {
   const rows: StoredRow[] = [];
+  const upserts: Array<{
+    id: string;
+    amount_ml: number;
+    local_date: string;
+  }> = [];
   let nextSeq = 0;
+  let upsertError: Error | null = null;
+  let writeGate: Promise<void> = Promise.resolve();
+  let releaseWrites: (() => void) | null = null;
 
   const from = vi.fn((_table: string) => ({
     select: (_columns?: string) => ({
@@ -67,52 +75,77 @@ const db = vi.hoisted(() => {
     upsert: (
       payload: { id: string; amount_ml: number; local_date: string },
       options?: { onConflict?: string; ignoreDuplicates?: boolean }
-    ) => ({
-      select: (_columns?: string) => ({
-        maybeSingle: async () => {
-          const existing = rows.find((row) => row.id === payload.id);
-          if (existing) {
-            if (options?.ignoreDuplicates) {
-              return { data: null, error: null };
+    ) => {
+      upserts.push(payload);
+      return {
+        select: (_columns?: string) => ({
+          maybeSingle: async () => {
+            await writeGate;
+            if (upsertError) {
+              return { data: null, error: upsertError };
             }
-            existing.amount_ml = payload.amount_ml;
-            existing.local_date = payload.local_date;
+            const existing = rows.find((row) => row.id === payload.id);
+            if (existing) {
+              if (options?.ignoreDuplicates) {
+                return { data: null, error: null };
+              }
+              existing.amount_ml = payload.amount_ml;
+              existing.local_date = payload.local_date;
+              return {
+                data: {
+                  id: existing.id,
+                  amount_ml: existing.amount_ml,
+                  local_date: existing.local_date,
+                },
+                error: null,
+              };
+            }
+            nextSeq += 1;
+            const stored: StoredRow = {
+              id: payload.id,
+              amount_ml: payload.amount_ml,
+              local_date: payload.local_date,
+              logged_at: String(nextSeq).padStart(8, '0'),
+            };
+            rows.push(stored);
             return {
               data: {
-                id: existing.id,
-                amount_ml: existing.amount_ml,
-                local_date: existing.local_date,
+                id: stored.id,
+                amount_ml: stored.amount_ml,
+                local_date: stored.local_date,
               },
               error: null,
             };
-          }
-          nextSeq += 1;
-          const stored: StoredRow = {
-            id: payload.id,
-            amount_ml: payload.amount_ml,
-            local_date: payload.local_date,
-            logged_at: String(nextSeq).padStart(8, '0'),
-          };
-          rows.push(stored);
-          return {
-            data: {
-              id: stored.id,
-              amount_ml: stored.amount_ml,
-              local_date: stored.local_date,
-            },
-            error: null,
-          };
-        },
-      }),
-    }),
+          },
+        }),
+      };
+    },
   }));
 
   return {
     rows,
+    upserts,
     from,
+    setUpsertError(error: Error | null) {
+      upsertError = error;
+    },
+    holdWrites() {
+      writeGate = new Promise<void>((resolve) => {
+        releaseWrites = resolve;
+      });
+      return () => {
+        writeGate = Promise.resolve();
+        releaseWrites?.();
+        releaseWrites = null;
+      };
+    },
     reset() {
       rows.length = 0;
+      upserts.length = 0;
       nextSeq = 0;
+      upsertError = null;
+      writeGate = Promise.resolve();
+      releaseWrites = null;
       from.mockClear();
     },
   };
@@ -239,6 +272,74 @@ describe('useAddWater', () => {
     expect(result.current.yesterday.data).toEqual([]);
   });
 
+  it('does not reload the day when adding water fails', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.yesterday.isSuccess).toBe(true));
+
+    db.setUpsertError(new Error('insert failed'));
+    db.rows.push({
+      id: 'hidden',
+      amount_ml: 200,
+      local_date: today,
+      logged_at: '00000000',
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.add.mutateAsync({
+          id: 'op-fail',
+          amountMl: 100,
+          localDate: today,
+        })
+      ).rejects.toThrow('insert failed');
+    });
+
+    expect(result.current.today.data).toEqual([]);
+    expect(result.current.yesterday.data).toEqual([]);
+  });
+
+  it('keeps both overlapping writes after they finish', async () => {
+    const { result } = renderWater();
+    await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.yesterday.isSuccess).toBe(true));
+
+    const releaseWrites = db.holdWrites();
+    let first: Promise<unknown> | undefined;
+    let second: Promise<unknown> | undefined;
+    act(() => {
+      first = result.current.add.mutateAsync({
+        id: 'op-1',
+        amountMl: 100,
+        localDate: today,
+      });
+    });
+    act(() => {
+      second = result.current.add.mutateAsync({
+        id: 'op-2',
+        amountMl: 200,
+        localDate: today,
+      });
+    });
+
+    await waitFor(() => expect(db.upserts).toHaveLength(2));
+    expect(result.current.today.data).toEqual([]);
+
+    releaseWrites();
+    await act(async () => {
+      await first;
+      await second;
+    });
+
+    await waitFor(() =>
+      expect(result.current.today.data).toEqual([
+        { id: 'op-1', amountMl: 100, localDate: today },
+        { id: 'op-2', amountMl: 200, localDate: today },
+      ])
+    );
+    expect(result.current.yesterday.data).toEqual([]);
+  });
+
   it('stores one row when the same operation id is sent twice', async () => {
     const { result } = renderWater();
     await waitFor(() => expect(result.current.today.isSuccess).toBe(true));
@@ -261,6 +362,39 @@ describe('useAddWater', () => {
 });
 
 describe('water Supabase API', () => {
+  it('asks Postgres to return water entries in logged_at order', async () => {
+    const calls: Array<{
+      column: string;
+      options?: { ascending?: boolean };
+    }> = [];
+    const recordingClient = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async (
+              column: string,
+              options?: { ascending?: boolean }
+            ) => {
+              if (options === undefined) {
+                calls.push({ column });
+              } else {
+                calls.push({ column, options });
+              }
+              return { data: [], error: null };
+            },
+          }),
+        }),
+      }),
+    };
+
+    await expect(
+      listWaterEntries(today, recordingClient as never)
+    ).resolves.toEqual([]);
+    expect(calls).toEqual([
+      { column: 'logged_at', options: { ascending: true } },
+    ]);
+  });
+
   it('propagates errors from listWaterEntries', async () => {
     const queryError = new Error('permission denied');
     const failingClient = {

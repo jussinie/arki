@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { WaterTracker } from './WaterTracker';
@@ -65,6 +65,44 @@ describe('WaterTracker loading and missing-goal states', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('progressbar', { name: 'Daily water goal' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides cached entries while the open day is loading', () => {
+    waterDay.isPending = true;
+    waterDay.data = [{ id: 'stale', amountMl: 200, localDate: '2026-11-20' }];
+    render(<WaterTracker localDate="2026-11-20" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading water…');
+    expect(
+      screen.queryByRole('list', { name: 'Water entries' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('200 ml', { exact: true })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^1 dl$/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('lists only the open local_date even when another day is in the payload', () => {
+    waterDay.data = [
+      { id: 'entry-200', amountMl: 200, localDate: '2026-11-20' },
+      { id: 'other-day', amountMl: 999, localDate: '2026-11-21' },
+      { id: 'entry-500', amountMl: 500, localDate: '2026-11-20' },
+    ];
+    render(<WaterTracker localDate="2026-11-20" />);
+
+    expect(
+      within(screen.getByRole('list', { name: 'Water entries' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['200 ml', '500 ml']);
+    expect(
+      screen.getByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuetext', '700 ml of 2 L');
+    expect(
+      screen.queryByText('999 ml', { exact: true })
     ).not.toBeInTheDocument();
   });
 

@@ -568,6 +568,49 @@ describe('water_entries table, RLS, and idempotency (ARK-9)', () => {
     );
   });
 
+  it('lists a newly added entry after existing rows in logged_at order', async () => {
+    const firstId = crypto.randomUUID();
+    const secondId = crypto.randomUUID();
+    const addedId = crypto.randomUUID();
+    userACreatedIds.push(firstId, secondId, addedId);
+
+    const { error } = await userAClient.from('water_entries').insert([
+      {
+        id: secondId,
+        amount_ml: 500,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T09:00:00Z',
+      },
+      {
+        id: firstId,
+        amount_ml: 200,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T08:00:00Z',
+      },
+    ]);
+    expect(error).toBeNull();
+
+    await expect(
+      addWaterEntry(
+        { id: addedId, amountMl: 100, localDate: '2026-11-20' },
+        userAClient
+      )
+    ).resolves.toEqual({
+      id: addedId,
+      amountMl: 100,
+      localDate: '2026-11-20',
+    });
+
+    await expect(listWaterEntries('2026-11-20', userAClient)).resolves.toEqual([
+      { id: firstId, amountMl: 200, localDate: '2026-11-20' },
+      { id: secondId, amountMl: 500, localDate: '2026-11-20' },
+      { id: addedId, amountMl: 100, localDate: '2026-11-20' },
+    ]);
+    await expect(listWaterEntries('2026-11-20', userBClient)).resolves.toEqual(
+      []
+    );
+  });
+
   it('rejects cross-user id collision via addWaterEntry without overwriting User A row', async () => {
     const sharedId = crypto.randomUUID();
     userACreatedIds.push(sharedId);
