@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { App } from './App';
@@ -48,6 +54,11 @@ const db = vi.hoisted(() => {
 
   return {
     from,
+    seed(
+      nextRows: Array<{ id: string; amount_ml: number; local_date: string }>
+    ) {
+      rows.push(...nextRows);
+    },
     reset() {
       rows.length = 0;
       from.mockClear();
@@ -122,6 +133,42 @@ describe('App', () => {
     expect(
       await screen.findByText('0.2 L', { exact: true })
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Water entries' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['200 ml']);
+  });
+
+  it('lists restored water entries and the local_date total on Today', async () => {
+    db.seed([
+      { id: 'entry-200', amount_ml: 200, local_date: '2026-11-20' },
+      { id: 'entry-500', amount_ml: 500, local_date: '2026-11-20' },
+      { id: 'other-day', amount_ml: 999, local_date: '2026-11-21' },
+    ]);
+    auth.getSession.mockResolvedValue({
+      data: { session: { user } },
+      error: null,
+    });
+    render(<App localDate="2026-11-20" />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Today' })
+    ).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Water entries' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['200 ml', '500 ml']);
+    const orb = await screen.findByRole('progressbar', {
+      name: 'Daily water goal',
+    });
+    expect(orb).toHaveAttribute('aria-valuetext', '700 ml of 2 L');
+    expect(screen.getByText('0.7 L', { exact: true })).toBeInTheDocument();
+    expect(
+      screen.queryByText('999 ml', { exact: true })
+    ).not.toBeInTheDocument();
   });
 
   it('restores Today from an existing session', async () => {

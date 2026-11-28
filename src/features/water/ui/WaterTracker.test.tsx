@@ -375,6 +375,64 @@ describe('WaterTracker', () => {
     expect(labels).toContain('500 ml');
   });
 
+  it('lists 1 ml and 5000 ml entries and a 5001 ml total', async () => {
+    db.seed([
+      {
+        id: 'min-amount',
+        amount_ml: 1,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T08:00:00.000Z',
+      },
+      {
+        id: 'max-amount',
+        amount_ml: 5000,
+        local_date: '2026-11-20',
+        logged_at: '2026-11-20T09:00:00.000Z',
+      },
+    ]);
+    renderTracker();
+
+    const list = await screen.findByRole('list', { name: 'Water entries' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['1 ml', '5000 ml']);
+    const orb = await screen.findByRole('progressbar', {
+      name: 'Daily water goal',
+    });
+    expect(orb).toHaveAttribute('aria-valuetext', '5001 ml of 2 L');
+    expect(screen.getByText('5.001 L', { exact: true })).toBeInTheDocument();
+  });
+
+  it('lists a successful add after an earlier add failed', async () => {
+    renderTracker(() => 'op-retry');
+    expect(await screen.findByText('0 L', { exact: true })).toBeInTheDocument();
+
+    db.setUpsertError(new Error('insert failed'));
+    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not add water. Try again.'
+    );
+    expect(
+      screen.queryByRole('list', { name: 'Water entries' })
+    ).not.toBeInTheDocument();
+
+    db.setUpsertError(null);
+    fireEvent.click(screen.getByRole('button', { name: /^1 dl$/ }));
+
+    const list = await screen.findByRole('list', { name: 'Water entries' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent?.replace(/\s+/g, ' ').trim())
+    ).toEqual(['100 ml']);
+    expect(
+      screen.getByRole('progressbar', { name: 'Daily water goal' })
+    ).toHaveAttribute('aria-valuetext', '100 ml of 2 L');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows an error alert instead of the orb when loading water entries fails', async () => {
     db.setSelectError(new Error('network error'));
     renderTracker();
